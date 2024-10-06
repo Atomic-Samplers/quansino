@@ -1,0 +1,40 @@
+name: docs
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repo
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install pip packages
+        run: |
+          pip install uv
+          uv pip install --system .[docs]
+
+      - name: Build docs
+        run: mkdocs build
+        id: build_docs
+
+      - name: Rebuild and deploy docs
+        run: mkdocs gh-deploy --force
+        if: github.ref == 'refs/heads/main' && steps.build_docs.outcome == 'success'
