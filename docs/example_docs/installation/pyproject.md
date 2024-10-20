@@ -4,7 +4,7 @@ The `pyproject.toml` file contains all of the necessary information on how Pytho
 
 ## Metadata
 
-There are several metadata-related fields that you will likely want to update. You should have already updated the `name` of the package in a prior step when you replaced "template" everywhere, but you will also want to change the following:
+There are several metadata-related fields that you will likely want to update. You should have already updated the `name` of the package in a prior step when you replaced "monacasi" everywhere, but you will also want to change the following:
 
 - `description`
 - `license` (if you changed the default `LICENSE.md` file)
@@ -17,7 +17,7 @@ Aside from the `name`, none of the above are strictly necessary and can be left 
 
 The most important fields to update are related to the dependencies: the Python packages that your own code relies on. This will ensure that they are automatically installed when installing your Python package.
 
-The required dependencies are listed under the `[project]` header in the `dependencies` field. By default, the template repository lists `["numpy"]`. Include any dependencies you want in this list, separated by commas. This should be all the packages you import in your code that are not standard Python libraries.
+The required dependencies are listed under the `[project]` header in the `dependencies` field. By default, the monacasi repository lists `["numpy"]`. Include any dependencies you want in this list, separated by commas. This should be all the packages you import in your code that are not standard Python libraries.
 
 !!! Tip
 

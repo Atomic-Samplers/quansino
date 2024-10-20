@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "template"
+name = "monacasi"
 description="A Python package description goes here."
 version = "0.0.1"
 readme = "README.md"
@@ -39,15 +39,15 @@ docs = [
 ]
 
 [project.urls]
-repository = "https://github.com/Quantum-Accelerators/template"
-documentation = "https://quantum-accelerators.github.io/template/"
-changelog = "https://github.com/Quantum-Accelerators/template/blob/main/CHANGELOG.md"
+repository = "https://github.com/Quantum-Accelerators/monacasi"
+documentation = "https://quantum-accelerators.github.io/monacasi/"
+changelog = "https://github.com/Quantum-Accelerators/monacasi/blob/main/CHANGELOG.md"
 
 [tool.setuptools.package-data]
-template = ["py.typed"]
+monacasi = ["py.typed"]
 
 [tool.pyright]
-include = ["template"]
+include = ["monacasi"]
 exclude = ["**/__pycache__"]
 
 [tool.pytest.ini_options]
@@ -137,7 +137,7 @@ lint.unfixable = [
   "F841", # Removes unused variables
 ]
 lint.pydocstyle.convention = "numpy"
-lint.isort.known-first-party = ["template"]
+lint.isort.known-first-party = ["monacasi"]
 lint.isort.required-imports = ["from __future__ import annotations"]
 extend-include = ["*.ipynb"]
 

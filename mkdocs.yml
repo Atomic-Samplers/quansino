@@ -1,7 +1,7 @@
-site_name: template
+site_name: monacasi
 site_author: YourName
 site_description: >-
-  This is the template package!
+  This is the monacasi package!
 nav:
   - Home: index.md
   - Overview:
@@ -33,7 +33,7 @@ nav:
       - example_docs/about/conduct.md
       - example_docs/about/license.md
 
-repo_url: https://github.com/Quantum-Accelerators/template/
+repo_url: https://github.com/Quantum-Accelerators/monacasi/
 edit_uri: blob/main/docs/
 
 theme:

@@ -8,7 +8,7 @@ Now it's time to write some documentation! This isn't very difficult, and of cou
 
     Check out the [Markdown Guide](https://www.markdownguide.org/basic-syntax/) for an overview of the basic syntax.
 
-This template repository uses a documentation format called mkdocs, specifically a useful theme called [Material for Mkdocs](https://squidfunk.github.io/mkdocs-material/). This enables many wonderful goodies like the "tip" callout you see above and much more.
+This monacasi repository uses a documentation format called mkdocs, specifically a useful theme called [Material for Mkdocs](https://squidfunk.github.io/mkdocs-material/). This enables many wonderful goodies like the "tip" callout you see above and much more.
 
 ## Adding Markdown Files
 

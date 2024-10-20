@@ -14,4 +14,4 @@ Here, the `-e` means editable mode, the `.` means the current directory, and the
 
     You should generally start from a clean Python environment, such as a new Conda environment if you are using Anaconda or one of its variants.
 
-To make sure you installed your package successfully, open a Python console and run `import <MyPackageName>`. It should return without any errors. If there are errors, it's likely because you forgot to replace a "template" placeholder with the name of your package.
+To make sure you installed your package successfully, open a Python console and run `import <MyPackageName>`. It should return without any errors. If there are errors, it's likely because you forgot to replace a "monacasi" placeholder with the name of your package.
