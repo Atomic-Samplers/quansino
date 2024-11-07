@@ -1,5 +1,3 @@
-# quansino
+# Home
 
-Welcome to the documentation for the `quansino` code! Here you will find everything you need to get started with your own Python package.
-
-**Check out the corresponding ⭐[YouTube tutorial](https://www.youtube.com/watch?v=th2CqJ6oBuM)⭐ for a video overview!**
+The `quansino` code aim to provide a simple-to-use platform for quickly creating customized Monte Carlo simulations. The code is based on [`ase`](https://wiki.fysik.dtu.dk/ase/) and aim to be modular and flexible.
