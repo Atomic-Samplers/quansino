@@ -9,7 +9,7 @@ nav:
   - Documentation:
       - documentation/overview.md
       - documentation/examples.md
-#  - Code Documentation: reference/ # keep me!
+  - Code Documentation: reference/ # keep me!
   - About:
       - about/changelog.md
       - about/conduct.md
@@ -109,8 +109,8 @@ plugins:
             merge_init_into_class: true
             docstring_options:
               ignore_init_summary: true
-#  - gen-files:
-#      scripts:
-#        - docs/gen_ref_pages.py
+  - gen-files:
+      scripts:
+        - docs/gen_ref_pages.py
   - literate-nav:
       nav_file: SUMMARY.md
