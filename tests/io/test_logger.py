@@ -3,6 +3,7 @@ from __future__ import annotations
 from io import StringIO
 
 import numpy as np
+from ase.calculators.emt import EMT
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.md.verlet import VelocityVerlet
 from ase.optimize import BFGS
@@ -29,12 +30,12 @@ def test_logger():
     assert values == "GrandCanonicalMC" + " " * 10 + "123141.0000" + " " * 12 + "1"
 
 
-def test_opt_custom_logger(atoms):
-    atoms.rattle(0.1)
+def test_opt_custom_logger(bulk_small):
+    bulk_small.rattle(0.1)
 
     string_io = StringIO()
     logger = Logger(string_io)
-    opt = BFGS(atoms, logfile=None)
+    opt = BFGS(bulk_small, logfile=None)
 
     def negative_omega():
         if opt.nsteps > 0:
@@ -59,12 +60,12 @@ def test_opt_custom_logger(atoms):
     string_io.close()
 
 
-def test_md_logger(atoms):
+def test_md_logger(bulk_small):
     string_io = StringIO()
     logger = Logger(string_io)
 
-    MaxwellBoltzmannDistribution(atoms, temperature_K=300)
-    dyn = VelocityVerlet(atoms, 1.0 * fs)
+    MaxwellBoltzmannDistribution(bulk_small, temperature_K=300)
+    dyn = VelocityVerlet(bulk_small, 1.0 * fs)
 
     dyn.attach(logger)
 
@@ -91,17 +92,19 @@ def test_md_logger(atoms):
     string_io.close()
 
 
-def test_opt_stress_logger(atoms):
-    atoms.rattle(0.1)
+def test_opt_stress_logger(bulk_small):
+    bulk_small.rattle(0.1)
+
+    bulk_small.calc = EMT()  # switch to EMT for stress calculation
 
     string_io = StringIO()
     logger = Logger(string_io)
 
-    MaxwellBoltzmannDistribution(atoms, temperature_K=300)
-    dyn = VelocityVerlet(atoms, 1.0 * fs)
+    MaxwellBoltzmannDistribution(bulk_small, temperature_K=300)
+    dyn = VelocityVerlet(bulk_small, 1.0 * fs)
 
     logger.add_md_fields(dyn)
-    logger.add_stress_fields(atoms, mask=[False, True, False, True, True, False])
+    logger.add_stress_fields(bulk_small, mask=[False, True, False, True, True, False])
 
     dyn.attach(logger)
 
@@ -122,7 +125,7 @@ def test_opt_stress_logger(atoms):
     assert "xyStress[GPa]" not in logger_lines
 
     logger.remove_fields("yyStress[GPa]")
-    logger.add_stress_fields(atoms, mask=[False, False, False, False, False, True])
+    logger.add_stress_fields(bulk_small, mask=[False, False, False, False, False, True])
 
     logger.write_header()
 
