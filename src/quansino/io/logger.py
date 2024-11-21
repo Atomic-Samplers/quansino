@@ -139,13 +139,9 @@ class Logger(IOContext):
         simulation
             The Monte Carlo simulation object.
         """
-        names = ["Class", "Step", "Epot[eV]"]
-        functions = [
-            lambda: simulation.__class__.__name__,
-            lambda: simulation.nsteps,
-            simulation.atoms.get_potential_energy,
-        ]
-        str_formats = ["<12s", ">12d", ">12.4f"]
+        names = ["Step", "Epot[eV]"]
+        functions = [lambda: simulation.nsteps, simulation.atoms.get_potential_energy]
+        str_formats = ["<12d", ">12.4f"]
 
         for name, function, str_format in zip(names, functions, str_formats):
             self.add_field(name, function, str_format)
