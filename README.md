@@ -9,6 +9,7 @@
 ![Python Version](https://img.shields.io/pypi/pyversions/quansino)
 [![GitHub license](https://img.shields.io/github/license/your-username/quansino)](https://github.com/your-username/quansino/blob/main/LICENSE)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 
 `quansino` is a modern simulation framework designed for both material science and molecular systems based on the Atomic Simulation Environment (ASE). It combines the reliability of established Monte Carlo and general sampling methods with an intuitive, and flexible Python interface.
 
