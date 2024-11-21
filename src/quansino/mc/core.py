@@ -72,6 +72,20 @@ class MonteCarlo(Dynamics):
             self.default_logger = Logger(logfile)
             self.default_logger.add_mc_fields(self)
             self.attach(self.closelater(self.default_logger), loginterval)
+        else:
+            self.default_logger = None
+
+    def irun(self, *args, **kwargs) -> Generator[bool]:  # type: ignore
+        """Run the Monte Carlo simulation for a given number of steps."""
+        if self.default_logger:
+            self.default_logger.write_header()
+        return super().irun(*args, **kwargs)  # type: ignore
+
+    def run(self, *args, **kwargs) -> bool:  # type: ignore
+        """Run the Monte Carlo simulation for a given number of steps."""
+        if self.default_logger:
+            self.default_logger.write_header()
+        return super().run(*args, **kwargs)  # type: ignore
 
     def todict(self) -> dict[str, Any]:
         """Return a dictionary representation of the Monte Carlo object.
@@ -89,7 +103,7 @@ class MonteCarlo(Dynamics):
             "nsteps": self.nsteps,
         }
 
-    def converged(self) -> bool:
+    def converged(self) -> bool:  # type: ignore
         """MC is 'converged' when number of maximum steps is reached.
 
         Returns
