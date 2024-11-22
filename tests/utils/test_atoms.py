@@ -6,7 +6,6 @@ from quansino.utils.atoms import has_constraint
 
 
 def test_has_constraint(bulk_large):
-
     bulk_large.set_constraint(FixAtoms(indices=[0]))
 
     assert has_constraint(bulk_large, FixAtoms)

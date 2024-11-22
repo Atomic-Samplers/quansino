@@ -21,7 +21,9 @@ def fbmc_fixture(bulk_small, tmp_path):
 
 
 def test_force_bias(fbmc):
-    displacements = np.abs([fbmc.atoms.get_velocities() for _ in fbmc.irun(200)]).mean(axis=0)  # type: ignore
+    displacements = np.abs([fbmc.atoms.get_velocities() for _ in fbmc.irun(200)]).mean(
+        axis=0
+    )  # type: ignore
 
     assert_allclose(displacements, 0.01 / 3, atol=0.01 / 9)
 
@@ -45,11 +47,15 @@ def test_force_bias_mass_setter(fbmc):
     assert_allclose(fbmc._masses, expected_masses)
     assert_allclose(fbmc.masses_scaling_power, expected)
 
-    random = np.random.random((len(fbmc.atoms), 3))
+    rng = np.random.default_rng()
+    random = rng.random((len(fbmc.atoms), 3))
 
     fbmc.masses_scaling_power = random
 
     assert_allclose(fbmc.masses_scaling_power, random)
+
+    with pytest.raises(ValueError):
+        fbmc.masses_scaling_power = [0.5, 0.5]
 
 
 def test_todict(fbmc):
@@ -70,7 +76,11 @@ def test_todict(fbmc):
 def test_constraints(fbmc):
     fbmc.atoms.set_constraint(FixAtoms(indices=[0, 1]))
 
-    displacements = np.abs([fbmc.atoms.get_velocities() for _ in fbmc.irun(50)]).mean(axis=0)  # type: ignore
+    fbmc.run(1)
+
+    displacements = np.abs([fbmc.atoms.get_velocities() for _ in fbmc.irun(50)]).mean(
+        axis=0
+    )  # type: ignore
 
     assert_allclose(displacements[:2], 0)
     assert_allclose(displacements[2:], 0.01 / 3, atol=0.001)

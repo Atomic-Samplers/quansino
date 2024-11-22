@@ -104,7 +104,7 @@ def test_opt_stress_logger(bulk_small):
     dyn = VelocityVerlet(bulk_small, 1.0 * fs)
 
     logger.add_md_fields(dyn)
-    logger.add_stress_fields(bulk_small, mask=[False, True, False, True, True, False])
+    logger.add_stress_fields(bulk_small)
 
     dyn.attach(logger)
 
@@ -117,12 +117,12 @@ def test_opt_stress_logger(bulk_small):
 
     pos = string_io.tell()
 
+    assert "xxStress[GPa]" in logger_lines
     assert "yyStress[GPa]" in logger_lines
-    assert "xxStress[GPa]" not in logger_lines
-    assert "zzStress[GPa]" not in logger_lines
+    assert "zzStress[GPa]" in logger_lines
     assert "yzStress[GPa]" in logger_lines
     assert "xzStress[GPa]" in logger_lines
-    assert "xyStress[GPa]" not in logger_lines
+    assert "xyStress[GPa]" in logger_lines
 
     logger.remove_fields("yyStress[GPa]")
     logger.add_stress_fields(bulk_small, mask=[False, False, False, False, False, True])
@@ -134,7 +134,10 @@ def test_opt_stress_logger(bulk_small):
     string_io.seek(pos)
     new_logger_lines = string_io.read()
 
+    assert "xxStress[GPa]" not in new_logger_lines
     assert "yyStress[GPa]" not in new_logger_lines
+    assert "zzStress[GPa]" not in new_logger_lines
+    assert "yzStress[GPa]" not in new_logger_lines
     assert "xzStress[GPa]" not in new_logger_lines
     assert "xyStress[GPa]" in new_logger_lines
 

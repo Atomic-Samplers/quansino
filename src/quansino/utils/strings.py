@@ -1,3 +1,6 @@
+from __future__ import annotations
+
+
 def get_auto_header_format(data_format: str) -> str:
     """
     Convert a data format string to a header format string.
