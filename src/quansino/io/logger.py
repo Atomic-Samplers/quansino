@@ -107,8 +107,7 @@ class Logger(IOContext):
             ["MovingAtoms[N]", "Econs[eV]"],
             [
                 lambda: len(simulation.indices),
-                lambda: simulation.transfered_energy -
-                        simulation.atoms.get_potential_energy()
+                lambda: simulation.transfered_energy - simulation.atoms.get_potential_energy(),
             ],
             [">12d", ">12.4f"],
         )
