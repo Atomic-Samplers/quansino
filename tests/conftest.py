@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 from ase.build import bulk
 from ase.calculators.eam import EAM
@@ -36,3 +37,8 @@ def bulk_large_fixture(eam_calc):
     atoms = bulk("Cu", cubic=True) * (6, 6, 6)
     atoms.calc = eam_calc
     return atoms
+
+
+@pytest.fixture(name="rng")
+def rng_fixture():
+    return np.random.default_rng()
