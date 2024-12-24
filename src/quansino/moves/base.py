@@ -16,13 +16,12 @@ if TYPE_CHECKING:
 
 @dataclass
 class BaseState:
-    to_move: int | IntegerArray | None = None
-    moved: int | IntegerArray | None = None
+    to_move: IntegerArray | None = None
+    moved: IntegerArray | None = None
 
 
 class BaseMove:
     REQUIRED_ATTRIBUTES: ClassVar[set[str]] = {"atoms", "rng"}
-    MAX_ATTEMPTS: ClassVar[int] = 10000
 
     def __init__(
         self,
@@ -43,19 +42,15 @@ class BaseMove:
 
         self.state = BaseState()
 
+        self.max_attempts: int = 10000
+
     def __call__(self) -> bool | list[bool]:
         atoms = self._context.atoms
         old_positions = atoms.get_positions()
 
-        if self.state.to_move is None:
-            self.state.to_move = self._context.rng.choice(
-                self.moving_indices,
-                size=self.moving_per_step,
-                replace=False,  # type: ignore
-            )
-
-        for _ in range(self.MAX_ATTEMPTS):
+        for _ in range(self.max_attempts):
             translation = np.full((len(atoms), 3), 0.0)
+
             translation[self.state.to_move] = self.move_functions[self.move_type]()
 
             atoms.set_positions(
@@ -95,15 +90,17 @@ class BaseMove:
         return True
 
     def update_indices(
-        self,
-        new_indices: int | IntegerArray | None = None,
-        old_indices: int | IntegerArray | None = None,
+        self, to_add: IntegerArray | None = None, to_remove: IntegerArray | None = None
     ):
-        is_addition = new_indices is not None
-        is_removal = old_indices is not None
-        assert is_addition ^ is_removal
+        is_addition = to_add is not None
+        is_removal = to_remove is not None
+
+        if not (is_addition ^ is_removal):
+            raise ValueError("Either new_indices or old_indices should be provided")
 
         if is_addition:
-            self.moving_indices = np.append(self.moving_indices, new_indices)
+            self.moving_indices = np.append(self.moving_indices, to_add).astype(int)
         elif is_removal:
-            self.moving_indices = np.delete(self.moving_indices, old_indices)
+            mask = np.isin(self.moving_indices, to_remove)
+            self.moving_indices = self.moving_indices - np.cumsum(mask)
+            self.moving_indices = self.moving_indices[~mask]

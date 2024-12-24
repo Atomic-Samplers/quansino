@@ -98,6 +98,23 @@ class AtomicMove(BaseMove):
 
         self.state = BaseState()
 
+    def __call__(self):
+        if len(self.moving_indices) == 0:
+            return False
+
+        number_that_will_move_now = (
+            len(self.moving_indices)
+            if len(self.moving_indices) < self.moving_per_step
+            else self.moving_per_step
+        )
+
+        if self.state.to_move is None:
+            self.state.to_move = self._context.rng.choice(
+                self.moving_indices, size=number_that_will_move_now, replace=False
+            )
+
+        return super().__call__()
+
     def box(self) -> Displacement:
         return self.context.rng.uniform(
             -self.delta, self.delta, size=(self.moving_per_step, 3)
@@ -118,7 +135,7 @@ class AtomicMove(BaseMove):
 
     def translation(self) -> Displacement:
         return (
-            self._context.rng.uniform(0, 1, (len(self.moving_indices), 3))
-            @ self._context.atoms.cell.array[None, :]
+            self._context.rng.uniform(0, 1, (self.moving_per_step, 3))
+            @ self._context.atoms.cell.array
             - self._context.atoms.positions[self.state.to_move]
         )

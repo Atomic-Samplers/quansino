@@ -88,3 +88,42 @@ def pop_atoms(atoms: Atoms, indices: int | IntegerArray) -> tuple[Atoms, Atoms]:
     mask = np.isin(np.arange(len(atoms)), indices)
 
     return atoms[mask], atoms[~mask]  # type: ignore
+
+
+def insert_atoms(atoms: Atoms, new_atoms: Atoms, indices: IntegerArray) -> None:
+    """Insert atoms into an Atoms object, in place.
+
+    Parameters
+    ----------
+    atoms
+        The Atoms object to insert atoms into.
+    new_atoms
+        The Atoms object with the atoms to insert.
+    indices
+        The indices where to insert the atoms.
+
+    Returns
+    -------
+    Atoms
+        The Atoms object with the inserted atoms.
+    """
+    if len(new_atoms) != len(indices):
+        raise ValueError(
+            "The number of indices must match the number of atoms to insert."
+        )
+
+    for name in atoms.arrays:
+        new_array = (
+            new_atoms.get_masses()
+            if name == "masses"
+            else new_atoms.arrays.get(name, 0)
+        )
+
+        atoms.arrays[name] = np.insert(atoms.arrays[name], indices, new_array, axis=0)
+
+    for name, array in new_atoms.arrays.items():
+        if name not in atoms.arrays:
+            new_array = np.zeros((len(atoms), *array.shape[1:]), dtype=array.dtype)
+            new_array[indices] = array
+
+            atoms.set_array(name, new_array)
