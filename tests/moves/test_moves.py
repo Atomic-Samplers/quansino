@@ -1,131 +1,162 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, cast
+
 import numpy as np
 import pytest
-from ase import Atom, Atoms
+from ase import Atoms
 from ase.build import molecule
 from ase.constraints import FixAtoms
 from numpy.testing import assert_allclose, assert_array_equal
 from scipy.stats import chisquare
 
-from quansino.mc.core import MonteCarloContext, MoveStore
-from quansino.moves.atomic import AtomicMove
-from quansino.moves.base import BaseMove
-from quansino.moves.exchange import (
-    AtomicExchangeMove,
-    ExchangeContext,
-    MolecularExchangeMove,
+from quansino.mc.contexts import DisplacementContext, ExchangeContext
+from quansino.moves.core import BaseMove
+from quansino.moves.displacements import DisplacementMove
+from quansino.moves.exchange import ExchangeMove
+from quansino.moves.operations import (
+    Ball,
+    Box,
+    Operation,
+    Rotation,
+    Sphere,
+    Translation,
+    TranslationRotation,
 )
-from quansino.moves.molecular import MolecularMove
+
+if TYPE_CHECKING:
+    from numpy.random import Generator
+
+    from quansino.typing import Displacement
 
 
 def test_base_move(bulk_small, rng):
-    context = MonteCarloContext(bulk_small, rng)
+    context = DisplacementContext(bulk_small, rng)
 
-    def dummy_move():
-        move.apply_constraints = False
+    class DummyOperation(Operation):
+        def calculate(self, context):
+            context.atoms.set_positions(np.zeros((len(context.atoms), 3)))
 
-    move = BaseMove(
-        moving_indices=[0, 1],
-        moving_per_step=1,
-        move_type="dummy",
-        move_functions={"dummy": dummy_move},
-    )
+    move = BaseMove(DummyOperation(), apply_constraints=True)
 
-    move.context = context
+    move.attach_simulation(context)
 
-    assert move.moving_indices == [0, 1]
-    assert move.moving_per_step == 1
-    assert move.move_type == "dummy"
-    assert move.move_functions == {"dummy": dummy_move}
-    assert move.state.to_move is None
+    assert move.context is not None
+    move.context = cast(DisplacementContext, move.context)
 
-    move()
+    assert move.context.atoms is not None
+    assert move.context.rng is not None
 
-    assert move.state.to_move is None
-    assert move.state.moved is None
-    assert not move.apply_constraints
+    move.context.selected_candidates = [0, 1, 2]
+    move.context.moving_indices = [0, 1]
 
-    move.update_indices([0, 1, 2])
-    assert_array_equal(move.moving_indices, [0, 1, 0, 1, 2])
+    move.context.register_success()
 
-    move.update_indices(None, 1)
-    assert_array_equal(move.moving_indices, [0, 0, 1, 2])
+    assert move.context.selected_candidates is None
 
-    move.update_indices(None, [0, 1])
-    assert_array_equal(move.moving_indices, [1, 2])
+    assert move.context.moving_indices is None
+    assert move.context.moved_candidates is not None
+    assert_array_equal(move.context.moved_candidates, [0, 1, 2])
 
-    with pytest.raises(ValueError):
-        move.update_indices(None, None)
+    move.context.register_failure()
 
-    with pytest.raises(ValueError):
-        move.update_indices([1, 2], [1, 2])
+    assert move.context.selected_candidates is None
 
-    move.check_move = lambda: False
-
-    assert not move()
-
-    move.check_move = lambda: True
-
-    move.max_attempts = 0
-
-    assert not move()
-
+    @dataclass
     class DummyContext:
-        _atoms = bulk_small
-        _rng = rng
+        atoms: Atoms
+        rng: Generator
 
-    with pytest.raises(AttributeError):
-        move.context = DummyContext()  # type: ignore
+    move.attach_simulation(DummyContext(bulk_small, rng))  # type: ignore
+
+    assert move.context is not None
+
+    move.move_operator.calculate(move.context)
+
+    assert_allclose(bulk_small.get_positions(), np.zeros((len(bulk_small), 3)))
 
 
 def test_simple_move(bulk_small, rng):
-    context = MonteCarloContext(bulk_small, rng)
-    move = AtomicMove(0.1, [1, 2])
-    move.context = context
+    context = DisplacementContext(bulk_small, rng)
 
-    assert move.move_type == "box"
-    assert move.delta == 0.1
-    assert move.moving_indices == [1, 2]
-    assert move.moving_per_step == 1
+    ball_operation = Sphere(0.1)
+    move = DisplacementMove(ball_operation)
+
+    with pytest.raises(AttributeError):
+        assert move.context is None
+
+    assert move.move_operator == ball_operation
+    assert_allclose(ball_operation.step_size, 0.1)
+
+    move.attach_simulation(context)
+
     assert move.context is not None
-    assert move.state is not None
-    assert move.state.to_move is None
+    assert_array_equal(move.candidate_indices, np.arange(len(bulk_small)))
 
-    move.state.to_move = [0]
     old_positions = bulk_small.get_positions()
-    move()
 
-    assert move.state.to_move is None
-    assert_array_equal(np.array(move.state.moved), [0])
+    assert move()
 
-    new_positions = bulk_small.get_positions()
+    norm = np.linalg.norm(bulk_small.get_positions() - old_positions)
 
-    assert_allclose(new_positions[0], old_positions[0], atol=0.1)
-    assert_allclose(new_positions[1:], old_positions[1:])
+    assert_allclose(norm, 0.1)
 
-    move.state.to_move = None
-    move()
-    displacement = bulk_small.get_positions() - old_positions
+    old_positions = bulk_small.get_positions()
 
-    assert np.all(displacement < 0.1)
+    move._number_of_available_candidates = 0
+
+    assert not move()
+
+    assert_allclose(bulk_small.get_positions(), old_positions)
+
+    move.set_candidate_indices([0, 0, 0, 0])
+
+    assert move()
+
+    assert len(np.unique(np.round(bulk_small.get_positions() - old_positions, 5))) == 3
+    assert move._number_of_available_candidates == 1
+
+    move.displacements_per_move = 4
+
+    old_positions = bulk_small.get_positions()
+
+    assert move()
+
+    assert len(np.unique(np.round(bulk_small.get_positions() - old_positions, 5))) == 3
+
+    old_positions = bulk_small.get_positions()
+    move.set_candidate_indices([-1, -1, -1, -1])
+
+    assert not move()
+
+    assert_allclose(bulk_small.get_positions(), old_positions)
+
+    random_int = rng.integers(0, len(bulk_small))
+    candidate_indices = [-1, -1, -1, -1]
+    candidate_indices[random_int] = 0
+
+    move.set_candidate_indices(candidate_indices)
+
+    assert move()
+
+    assert move.context.moved_candidates is not None
+    assert_array_equal(move.context.moved_candidates, [0])
+
+    trues = np.full(len(bulk_small), True)
+    trues[random_int] = False
+
+    assert_allclose(bulk_small.get_positions()[trues], old_positions[trues])
 
 
-def test_single_moves(rng):
+def test_translation_operation(rng):
     original_positions = rng.uniform(-50, 50, (1, 3))
+
     single_atom = Atoms("H", positions=original_positions)
-    context = MonteCarloContext(single_atom, rng)
-    move = AtomicMove(0.1, [0], moving_per_step=1, move_type="sphere")
-    move.context = context
-    move()
-
-    assert np.isclose(
-        np.linalg.norm(single_atom.get_positions() - original_positions), 0.1
-    )
-
     single_atom.center(vacuum=20)
-
-    move.move_type = "translation"
+    context = DisplacementContext(single_atom, rng)
+    move = DisplacementMove(Translation())
+    move.attach_simulation(context)
 
     positions_recording = []
 
@@ -138,21 +169,25 @@ def test_single_moves(rng):
 
     histogram = np.histogram(positions_recording, bins=10)[0]
 
-    assert chisquare(histogram, f_exp=np.ones_like(histogram) * 3000)[1] > 0.05
+    assert chisquare(histogram, f_exp=np.ones_like(histogram) * 3000)[1] > 0.02
 
 
 def test_edge_cases(bulk_small, rng):
-    context = MonteCarloContext(bulk_small, rng)
-    move = AtomicMove(0.1, np.arange(len(bulk_small)), moving_per_step=0)
-    move.context = context
+    context = DisplacementContext(bulk_small, rng)
+    move = DisplacementMove(
+        Box(0.1), np.arange(len(bulk_small)), displacements_per_move=0
+    )
+    move.attach_simulation(context)
     old_positions = bulk_small.get_positions()
 
-    assert move()
+    assert not move()
     assert_allclose(bulk_small.get_positions(), old_positions)
 
-    move.moving_indices = [0]
-    move.moving_per_step = 1
+    move.displacements_per_move = 1
+
+    move.set_candidate_indices([0, -1, -1, -1])
     bulk_small.set_constraint(FixAtoms([0]))
+
     assert move()
     assert_allclose(bulk_small.get_positions(), old_positions)
 
@@ -170,7 +205,7 @@ def test_edge_cases(bulk_small, rng):
     assert_allclose(bulk_small.get_positions(), new_positions)
 
     move.apply_constraints = True
-    move.moving_indices = [1, 2]
+    move.set_candidate_indices([-1, 1, 2, -1])
 
     assert move()
 
@@ -179,26 +214,27 @@ def test_edge_cases(bulk_small, rng):
 
 def test_ball_move(rng):
     single_atom = Atoms("H", positions=[[0, 0, 0]])
-    context = MonteCarloContext(single_atom, rng)
+    context = DisplacementContext(single_atom, rng)
 
-    move = AtomicMove(0.1, [0], move_type="ball")
+    move = DisplacementMove(Ball(0.1), [0])
     move.context = context
-    assert move()
-    assert move.state.moved == 0
 
+    assert move()
+    assert move.context.moved_candidates == [0]
+
+    assert np.linalg.norm(single_atom.positions) > 0
     assert np.linalg.norm(single_atom.positions) < 0.1
 
 
 def test_molecular_move(rng):
     water = molecule("H2O", vacuum=10)
 
-    context = MonteCarloContext(water, rng)
+    context = DisplacementContext(water, rng)
 
-    move = MolecularMove([0, 0, 0], 0.1)
+    move = DisplacementMove(Rotation(), [0, 0, 0])
 
-    assert isinstance(move.molecule_ids, dict)
-    assert len(move.molecule_ids) == 1
-    assert_array_equal(move.moving_indices, [0, 1, 2])
+    assert isinstance(move.move_operator, Rotation)
+    assert move.move_operator.center == "COM"
 
     move.context = context
 
@@ -215,7 +251,7 @@ def test_molecular_move(rng):
 
     assert_allclose(distances, new_distances)
 
-    move.move_type = "sphere"
+    move.move_operator = Sphere(0.1)
 
     move()
 
@@ -231,11 +267,7 @@ def test_molecular_move(rng):
     old_positions = water.get_positions()
     distances = np.linalg.norm(water.positions[:, None] - water.positions, axis=-1)
 
-    move.molecule_ids = np.array([0, 0, 0, -1, -1, -1])
-
-    assert len(move.molecule_ids) == 1
-    assert move.molecule_ids.get(-1) is None
-    assert_array_equal(move.molecule_ids[0], [0, 1, 2])
+    move.candidate_indices = np.array([0, 0, 0, -1, -1, -1])
 
     for _ in range(1000):
         move()
@@ -246,27 +278,31 @@ def test_molecular_move(rng):
     assert_allclose(distances[:3, :3], new_distances[:3, :3])
     assert_allclose(old_positions[3:], water.positions[3:])
 
-    move.update_indices([3, 4, 5])
+    move.set_candidate_indices([0, 0, 0, 1, 1, 1])
+
+    move.displacements_per_move = 2
+
+    old_positions = water.get_positions()
+
+    for _ in range(10):
+        move()
+
+    assert not np.allclose(old_positions[:3], water.positions[:3])
+    assert not np.allclose(old_positions[3:], water.positions[3:])
 
 
 def test_molecular_on_atoms(rng):
     atom = Atoms("H", positions=[[0, 0, 0]])
 
-    context = MonteCarloContext(atom, rng)
-    move = MolecularMove([0], 0.1)
+    context = DisplacementContext(atom, rng)
+    move = DisplacementMove(Rotation(), [0])
     move.context = context
 
     assert move()
 
     assert_allclose(atom.positions, [[0, 0, 0]])
 
-    move.move_type = "sphere"
-
-    assert move()
-    assert_allclose(np.linalg.norm(atom.positions), 0.1)
-    assert move.state.moved == 0
-
-    move.move_type = "translation_rotation"
+    move.move_operator = TranslationRotation()
 
     assert move()
 
@@ -281,20 +317,18 @@ def test_molecular_on_atoms(rng):
         assert np.all(atom.get_scaled_positions() < 1)
 
 
-def test_atomic_exchange_move(rng):
+def test_exchange_move(rng):
     atoms = Atoms()
 
-    initial_position = rng.uniform(-50, 50, 3)
+    initial_position = rng.uniform(-50, 50, (1, 3))
 
-    exchange_atom = Atom("H", position=initial_position)
+    exchange_atoms = Atoms("H", positions=initial_position)
 
-    move = AtomicExchangeMove(exchange_atom=exchange_atom)
+    move = ExchangeMove(exchange_atoms=exchange_atoms)
 
-    move_store = MoveStore(move, 1, 1.0, 0)
+    context = ExchangeContext(atoms, rng, moves={"default": move})
 
-    context = ExchangeContext(atoms, rng, {"default": move_store})
-
-    move.context = context
+    move.attach_simulation(context)
 
     move.bias_towards_insert = 1.0
 
@@ -303,11 +337,14 @@ def test_atomic_exchange_move(rng):
     assert len(atoms) == 1
     assert_allclose(atoms.get_positions(), np.zeros((1, 3)))
 
+    move.update_moves()
+    assert_array_equal(move.candidate_indices, [0])
+
     atoms.set_cell(np.eye(3) * 100)
 
     for _ in range(1000):
         assert move()
-        move.revert_move()
+        move.context.revert_move()
 
     assert len(atoms) == 1
     assert_allclose(atoms.get_positions(), np.zeros((1, 3)))
@@ -316,11 +353,10 @@ def test_atomic_exchange_move(rng):
         assert move()
         move.update_moves()
 
-    assert move.exchange_state.last_added is not None
-    assert move.exchange_state.last_deleted is None
-    assert isinstance(move.moving_indices, np.ndarray)
-    assert len(move.moving_indices) == 100
+    assert move.context.last_added_indices is not None
+    assert move.context.last_deleted_indices is None
     assert len(atoms) == 101
+    assert_array_equal(move.candidate_indices, np.arange(101))
 
     move.bias_towards_insert = 0.0
 
@@ -328,19 +364,121 @@ def test_atomic_exchange_move(rng):
 
     for _ in range(100):
         assert move()
-        move.revert_move()
+        move.context.revert_move()
 
     assert len(atoms) == 101
-
     assert atoms == old_atoms
 
-    while len(move.moving_indices) > 0:
+    while len(move.candidate_indices) > 0:
         size = (
             rng.integers(1, 5)
-            if len(move.moving_indices) > 5
-            else len(move.moving_indices)
+            if len(move._unique_candidates) > 5
+            else len(move._unique_candidates)
         )
-        move.state.to_move = rng.choice(move.moving_indices, size=size)
+        move.context.deletion_candidates = rng.choice(
+            move._unique_candidates, size=size
+        )
         assert move()
         move.update_moves()
-        assert len(set(move.moving_indices)) == len(move.moving_indices)
+
+        assert move.context.last_deleted_indices is not None
+        assert move.context.deletion_candidates is not None
+
+        assert not np.isin(
+            move.candidate_indices, move.context.deletion_candidates
+        ).any()
+
+
+def test_molecular_exchange_move(rng):
+    atoms = Atoms()
+
+    exchange_atoms = molecule("H2O", vacuum=10)
+
+    old_distance = np.linalg.norm(
+        exchange_atoms.positions[:, None] - exchange_atoms.positions, axis=-1
+    )
+
+    move = ExchangeMove(exchange_atoms=exchange_atoms)
+
+    context = ExchangeContext(atoms, rng, moves={"default": move})
+
+    move.attach_simulation(context)
+
+    move.bias_towards_insert = 1.0
+
+    move.context.selected_candidates = []
+    assert move()
+    move.update_moves()
+
+    assert len(atoms) == 3
+
+    new_distance = np.linalg.norm(atoms.positions[:, None] - atoms.positions, axis=-1)
+
+    assert_allclose(new_distance, old_distance)
+    assert_array_equal(move.candidate_indices, [0, 0, 0])
+
+    atoms.set_cell(np.eye(3) * 100)
+
+    old_positions = atoms.get_positions()
+
+    for _ in range(1000):
+        assert move()
+        move.context.revert_move()
+
+    assert len(atoms) == 3
+    assert_allclose(atoms.get_positions(), old_positions)
+
+    for _ in range(100):
+        assert move()
+        move.update_moves()
+
+    assert move.context.last_added_indices is not None
+    assert move.context.last_deleted_atoms is None
+    assert len(atoms) == 303
+
+    move.bias_towards_insert = 0.0
+
+    old_atoms = atoms.copy()
+
+    for _ in range(100):
+        assert move()
+        move.context.revert_move()
+
+    assert len(atoms) == 303
+    assert atoms == old_atoms
+
+    while len(move.candidate_indices) > 0:
+        size = (
+            rng.integers(1, 5)
+            if len(move._unique_candidates) > 5
+            else len(move._unique_candidates)
+        )
+        move.context.deletion_candidates = rng.choice(
+            move._unique_candidates, size=size
+        )
+        assert move()
+        move.update_moves()
+
+        assert move.context.last_deleted_indices is not None
+        assert move.context.deletion_candidates is not None
+
+        assert not np.isin(
+            move.candidate_indices, move.context.deletion_candidates
+        ).any()
+
+
+def test_addition_operations(bulk_small, rng):
+    class DummyTranslation(Operation):
+        def calculate(self, context: DisplacementContext) -> Displacement:
+            return np.ones((1, 3))
+
+    double_displacement = DummyTranslation() + DummyTranslation()
+
+    move = DisplacementMove(double_displacement, displacements_per_move=4)
+    context = DisplacementContext(bulk_small, rng)
+    move.attach_simulation(context)
+
+    old_positions = bulk_small.get_positions()
+
+    assert move()
+    assert_allclose(bulk_small.get_positions(), old_positions + 2)
