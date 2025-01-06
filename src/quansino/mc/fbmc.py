@@ -46,25 +46,18 @@ class ForceBias(MonteCarlo):
     GAMMA_MAX_VALUE = 709.782712
 
     def __init__(
-        self,
-        atoms: Atoms,
-        delta: float,
-        temperature: float = 298.15,
-        seed: int | None = None,
-        **mc_kwargs,
+        self, atoms: Atoms, delta: float, temperature: float = 298.15, **mc_kwargs
     ) -> None:
         """Initialize the Force Bias Monte Carlo object."""
         self.delta = delta
         self.temperature = temperature * kB
-
-        seed = seed or np.random.PCG64().random_raw()
 
         self._size = (atoms.get_global_number_of_atoms(), 3)
         self.update_masses(atoms.get_masses())
 
         self.masses_scaling_power = 0.25
 
-        MonteCarlo.__init__(self, atoms, seed=seed, **mc_kwargs)
+        MonteCarlo.__init__(self, atoms, **mc_kwargs)
 
         if not has_constraint(self.atoms, "FixCom"):
             warn(
@@ -179,11 +172,11 @@ class ForceBias(MonteCarlo):
 
     def _get_zeta(self) -> NDArray[np.floating]:
         """Get the zeta parameter for the Monte Carlo step."""
-        return self._MonteCarlo__rng.uniform(-1, 1, self._size)  # type: ignore
+        return self._rng.uniform(-1, 1, self._size)  # type: ignore
 
     def _get_random(self) -> NDArray[np.floating]:
         """Get the random parameter for the Monte Carlo step."""
-        return self._MonteCarlo__rng.random(self._size)  # type: ignore
+        return self._rng.random(self._size)  # type: ignore
 
     def _calculate_trial_probability(self) -> NDArray[np.floating]:
         """Calculate the trial probability for the Monte Carlo step."""

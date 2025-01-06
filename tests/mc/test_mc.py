@@ -2,23 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from quansino.mc.core import MonteCarlo
 
 
 def test_mc_class(bulk_small):
-    """Test that the ForceBias class works as expected."""
     mc = MonteCarlo(bulk_small, seed=42)
 
-    with pytest.raises(AttributeError):
-        assert mc.__rng
-
-    with pytest.raises(AttributeError):
-        assert MonteCarlo.__seed
-
-    assert mc._MonteCarlo__seed == 42
-    assert mc._MonteCarlo__rng is not None
+    assert mc._seed == 42
+    assert mc._rng is not None
     assert mc.trajectory is None
     assert mc.atoms == bulk_small
     assert mc.converged()
@@ -60,6 +51,6 @@ def test_todict(bulk_small):
         "type": "monte-carlo",
         "mc-type": "MonteCarlo",
         "seed": 42,
-        "rng_state": mc._MonteCarlo__rng.bit_generator.state,
+        "rng_state": mc._rng.bit_generator.state,
         "nsteps": 1234,
     }
