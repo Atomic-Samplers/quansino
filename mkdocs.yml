@@ -17,6 +17,7 @@ nav:
 
 repo_url: https://github.com/Atomic-Samplers/quansino/
 edit_uri: blob/main/docs/
+site_url: https://atomic-samplers.github.io/quansino/
 
 theme:
   favicon: images/water.png
