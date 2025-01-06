@@ -9,7 +9,7 @@ nav:
   - Documentation:
       - documentation/overview.md
       - documentation/examples.md
-  - Code Documentation: reference/ # keep me!
+  - Code Documentation: reference/
   - About:
       - about/changelog.md
       - about/conduct.md
@@ -19,6 +19,7 @@ repo_url: https://github.com/Atomic-Samplers/quansino/
 edit_uri: blob/main/docs/
 
 theme:
+  favicon: images/water.png
   features:
     - content.action.edit
     - content.code.copy
@@ -36,6 +37,11 @@ theme:
     - search.share
     - header.autohide
     - toc.follow
+  extra_css:
+    - stylesheets/extra.css
+  extra_javascript:
+    - javascripts/extra.js
+  logo: images/ammonia.png
   name: material
   palette:
     - media: "(prefers-color-scheme: light)"

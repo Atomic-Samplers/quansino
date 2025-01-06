@@ -3,5 +3,3 @@ The `quansino` package is not yet available on PyPI, but can be installed from t
 ```bash
 pip install git+https://github.com/Atomic-Samplers/quansino.git
 ```
-
-Current dependencies include `numpy` and `ase`.

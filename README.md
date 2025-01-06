@@ -1,4 +1,8 @@
 <div align="center">
+  <img src=docs/images/quansino_logo.png width="400"><br>
+</div>
+
+<div align="center">
   <h1><code>quansino</code> :game_die:</h1>
   <p><i>Modular Stochastic Simulations for Atomistic Modelling</i></p>
 </div>
@@ -11,7 +15,7 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 
-`quansino` is a modern simulation framework designed for both material science and molecular systems based on the Atomic Simulation Environment (ASE). It combines the reliability of established Monte Carlo and general sampling methods with an intuitive, and flexible Python interface.
+`quansino` is a modern simulation framework based on the Atomic Simulation Environment (ASE) designed for both material science and molecular systems. It combines the reliability of established Monte Carlo and general sampling methods with an intuitive, and flexible Python interface.
 
 ## Key Features :slot_machine:
 
