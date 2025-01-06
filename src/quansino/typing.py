@@ -1,7 +1,7 @@
 """Module for type hints.
 
 This module provides type hints for various data structures used throughout the quansino package.
-These type hints help ensure type safety and improve code readability by clearly defining 
+These type hints help ensure type safety and improve code readability by clearly defining
 the expected data types and structures.
 
 Examples
