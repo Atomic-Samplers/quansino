@@ -123,7 +123,7 @@ class ForceBias(MonteCarlo):
                 indices = self.atoms.symbols == el
                 self._masses_scaling_power[indices, :] = value.get(el, 0.25)
 
-        elif isinstance(value, (float, np.floating)):
+        elif isinstance(value, float | np.floating):
             self._masses_scaling_power = np.full(self._size, value)
         elif isinstance(value, np.ndarray):
             assert value.shape == self._size

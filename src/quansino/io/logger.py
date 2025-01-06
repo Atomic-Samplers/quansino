@@ -13,8 +13,9 @@ from ase.utils import IOContext
 from quansino.utils.strings import get_auto_header_format
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
-    from typing import IO, Any, Callable
+    from typing import IO, Any
 
     from ase import Atoms
     from ase.md.md import MolecularDynamics
@@ -113,8 +114,8 @@ class Logger(IOContext):
         )
         ```
         """
-        if isinstance(name, (list, tuple, np.ndarray)):
-            assert isinstance(str_format, (list, tuple, np.ndarray))
+        if isinstance(name, list | tuple | np.ndarray):
+            assert isinstance(str_format, list | tuple | np.ndarray)
             assert len(name) == len(str_format)
             self._is_field_list[function] = True
         else:
@@ -142,7 +143,9 @@ class Logger(IOContext):
         functions = [lambda: simulation.nsteps, simulation.atoms.get_potential_energy]
         str_formats = ["<12d", ">12.4f"]
 
-        for name, function, str_format in zip(names, functions, str_formats):
+        for name, function, str_format in zip(
+            names, functions, str_formats, strict=False
+        ):
             self.add_field(name, function, str_format)
 
     def add_md_fields(self, dyn: MolecularDynamics) -> None:
@@ -171,7 +174,9 @@ class Logger(IOContext):
         ]
         str_formats = ["<12.4f"] + [">12.4f"] * 3 + [">10.2f"]
 
-        for name, function, str_format in zip(names, functions, str_formats):
+        for name, function, str_format in zip(
+            names, functions, str_formats, strict=False
+        ):
             self.add_field(name, function, str_format)
 
     def add_opt_fields(self, optimizer: Optimizer) -> None:
@@ -200,7 +205,9 @@ class Logger(IOContext):
         ]
         str_formats = ["<24s"] + [">4d"] + [">12s"] + [">12.4f"] * 2
 
-        for name, function, str_format in zip(names, functions, str_formats):
+        for name, function, str_format in zip(
+            names, functions, str_formats, strict=False
+        ):
             self.add_field(name, function, str_format)
 
     def add_stress_fields(
@@ -295,7 +302,7 @@ class Logger(IOContext):
                 to_write.extend(
                     [
                         f"{n:{get_auto_header_format(fmt)}}"
-                        for n, fmt in zip(name, str_format)
+                        for n, fmt in zip(name, str_format, strict=False)
                     ]
                 )
             else:
