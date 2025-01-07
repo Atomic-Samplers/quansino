@@ -25,12 +25,11 @@
 
 ## Documentation :8ball:
 
-The full documentation can be found [here](https://quansino.readthedocs.io), and includes detailed instructions about:
+The full documentation can be found [here](https://atomic-samplers.github.io/quansino/), and includes detailed instructions about:
 
-- :gear: [Installation](https://quansino.readthedocs.io/en/latest/installation/install.html)
-- :thought_balloon: [Examples](https://quansino.readthedocs.io/en/latest/documentation/examples.html)
-- :eyes: [Overview](https://quansino.readthedocs.io/en/latest/documentation/overview.html)
-- :book: [API Reference](https://quansino.readthedocs.io/en/latest/api/index.html)
+- :gear: [Installation](https://atomic-samplers.github.io/quansino/installation/install.html)
+- :eyes: [Overview](https://atomic-samplers.github.io/quansino/documentation/overview.html)
+- :thought_balloon: [Examples](https://atomic-samplers.github.io/quansino/documentation/examples.html)
 
 ## License :black_joker:
 
