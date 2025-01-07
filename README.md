@@ -11,7 +11,8 @@
 
 [![PyPI version](https://badge.fury.io/py/quansino.svg)](https://badge.fury.io/py/quansino)
 ![Python Version](https://img.shields.io/pypi/pyversions/quansino)
-[![GitHub license](https://img.shields.io/github/license/your-username/quansino)](https://github.com/your-username/quansino/blob/main/LICENSE)
+[![codecov](https://codecov.io/gh/Atomic-Samplers/quansino/branch/main/graph/badge.svg?token=A864UNYUOG)](https://codecov.io/gh/Atomic-Samplers/quansino)
+[![GitHub license](https://img.shields.io/github/license/Atomic-Samplers/quansino)](https://github.com/Atomic-Samplers/quansino/blob/main/LICENSE.md)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 
