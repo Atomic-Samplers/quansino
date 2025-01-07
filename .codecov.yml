@@ -1,3 +1,5 @@
+ignore:
+  - "src/quansino/typing.py"
 comment: false
 coverage:
   status:
