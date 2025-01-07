@@ -79,8 +79,8 @@ def search_molecules(
     return molecules
 
 
-def insert_atoms(atoms: Atoms, new_atoms: Atoms, index: int) -> None:
-    """Insert atoms into an Atoms object, in place.
+def reinsert_atoms(atoms: Atoms, new_atoms: Atoms, indices: IntegerArray) -> None:
+    """Reinsert atoms into an Atoms object, in place. This differs from pure insertion in that it assumes that `new_atoms` were previously removed from `atoms` at their old `indices`.
 
     Parameters
     ----------
@@ -88,26 +88,37 @@ def insert_atoms(atoms: Atoms, new_atoms: Atoms, index: int) -> None:
         The Atoms object to insert atoms into.
     new_atoms
         The Atoms object with the atoms to insert.
-    index
-        The indices where to insert the atoms.
+    indices
+        The indices that `new_atoms` were previously removed from.
 
     Returns
     -------
     Atoms
-        The Atoms object with the inserted atoms.
+        The Atoms object with the reinserted atoms.
     """
+    len_atoms = len(atoms)
+    len_new_atoms = len(new_atoms)
+
     for name in atoms.arrays:
-        new_array = (
+        array = (
             new_atoms.get_masses()
             if name == "masses"
             else new_atoms.arrays.get(name, 0)
         )
 
-        atoms.arrays[name] = np.insert(atoms.arrays[name], index, new_array, axis=0)
+        new_array = np.zeros(
+            (len_atoms + len_new_atoms, *array.shape[1:]),
+            dtype=atoms.arrays[name].dtype,
+        )
+        mask = np.ones(len(new_array), dtype=bool)
+        mask[indices] = False
+        new_array[mask] = atoms.arrays[name]
+        new_array[indices] = array
+        atoms.arrays[name] = new_array
 
     for name, array in new_atoms.arrays.items():
         if name not in atoms.arrays:
             new_array = np.zeros((len(atoms), *array.shape[1:]), dtype=array.dtype)
-            new_array[index : index + len(new_atoms)] = array
+            new_array[indices] = array
 
             atoms.set_array(name, new_array)

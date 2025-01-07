@@ -442,10 +442,10 @@ def test_molecular_exchange_move(rng):
 
     for _ in range(100):
         assert move()
-        move.context.revert_move()
+        move.context.register_exchange_failure()
+        assert atoms == old_atoms
 
     assert len(atoms) == 303
-    assert atoms == old_atoms
 
     while len(move.candidate_indices) > 0:
         size = (

@@ -6,7 +6,7 @@ from ase.build import molecule
 from ase.constraints import FixAtoms, FixCom, FixedPlane
 from numpy.testing import assert_allclose, assert_array_equal
 
-from quansino.utils.atoms import has_constraint, insert_atoms, search_molecules
+from quansino.utils.atoms import has_constraint, reinsert_atoms, search_molecules
 
 
 def test_has_constraint(bulk_large):
@@ -92,12 +92,12 @@ def test_search_molecules(bulk_large, rng):
     assert len(np.unique(molecules[molecules != -1])) == counts["H2O"] + counts["CH4"]
 
 
-def test_insert_atoms(bulk_small, rng):
+def test_reinsert_atoms(bulk_small, rng):
     other_bulk_atoms = bulk_small.copy()
 
     other_bulk_atoms.set_initial_charges(rng.random(len(other_bulk_atoms)))
 
-    insert_atoms(bulk_small, other_bulk_atoms, 0)
+    reinsert_atoms(bulk_small, other_bulk_atoms, [0, 1, 2, 3])
 
     assert len(bulk_small) == 2 * len(other_bulk_atoms)
 
@@ -112,7 +112,9 @@ def test_insert_atoms(bulk_small, rng):
         bulk_small.positions[: len(other_bulk_atoms)], other_bulk_atoms.positions
     )
 
-    insert_atoms(bulk_small, other_bulk_atoms, len(bulk_small))
+    bulk_small.get_masses()
+
+    reinsert_atoms(bulk_small, other_bulk_atoms, [-4, -3, -2, -1])
 
     assert len(bulk_small) == 3 * len(other_bulk_atoms)
 
