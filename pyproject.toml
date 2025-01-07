@@ -39,7 +39,7 @@ docs = [
 
 [project.urls]
 repository = "https://github.com/Atomic-Samplers/quansino"
-documentation = "https://quantum-accelerators.github.io/quansino/"
+documentation = "https://atomic-samplers.github.io/quansino/"
 changelog = "https://github.com/Atomic-Samplers/quansino/blob/main/CHANGELOG.md"
 
 [tool.setuptools.package-data]
