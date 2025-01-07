@@ -1,5 +1,5 @@
 <div align="center">
-  <img src=docs/images/quansino_logo.png width="400"><br>
+  <img src=docs/images/quansino_logo.png width="500"><br>
 </div>
 
 <div align="center">
