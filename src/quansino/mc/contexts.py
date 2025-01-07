@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
-from quansino.utils.atoms import insert_atoms
+from quansino.utils.atoms import reinsert_atoms
 
 if TYPE_CHECKING:
     from ase.atoms import Atoms
@@ -194,4 +194,6 @@ class ExchangeContext(DisplacementContext):
             if self.last_deleted_atoms is None:
                 raise ValueError
 
-            insert_atoms(self.atoms, self.last_deleted_atoms, self.last_deleted_indices)
+            reinsert_atoms(
+                self.atoms, self.last_deleted_atoms, self.last_deleted_indices
+            )

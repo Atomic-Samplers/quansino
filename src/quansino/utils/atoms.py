@@ -35,7 +35,10 @@ def has_constraint(atoms: Atoms, constraint_type: type[FixConstraint] | str) -> 
 
 
 def search_molecules(
-    atoms: Atoms, cutoff: float | list[float] | tuple[float] | dict[tuple[str], float]
+    atoms: Atoms,
+    cutoff: float | list[float] | tuple[float] | dict[tuple[str, str], float],
+    required_size: int | tuple | None = None,
+    default_array: IntegerArray | None = None,
 ):
     """Search for molecules in the Atoms object.
 
@@ -61,37 +64,23 @@ def search_molecules(
     connectivity = np.full((len(atoms), len(atoms)), 0)
     connectivity[indices, neighbors] = 1
 
-    return {
-        n: list(mol)
-        for n, mol in enumerate(
-            nx.connected_components(nx.from_numpy_array(connectivity))
-        )
-        if len(mol) > 1
-    }
+    molecules = np.asarray(default_array) or np.full(len(atoms), -1)
+
+    if required_size is None:
+        required_size = (0, len(atoms))
+    elif isinstance(required_size, int):
+        required_size = (required_size, required_size)
+
+    for n, mol in enumerate(nx.connected_components(nx.from_numpy_array(connectivity))):
+        molecule_array = np.fromiter(mol, dtype=int)
+        if required_size[0] <= molecule_array.size <= required_size[1]:
+            molecules[molecule_array] = n
+
+    return molecules
 
 
-def pop_atoms(atoms: Atoms, indices: int | IntegerArray) -> tuple[Atoms, Atoms]:
-    """Pop atoms from an Atoms object.
-
-    Parameters
-    ----------
-    atoms
-        The Atoms object to pop atoms from.
-    indices
-        The indices of the atoms to pop.
-
-    Returns
-    -------
-    Atoms
-        The Atoms object with the popped atoms.
-    """
-    mask = np.isin(np.arange(len(atoms)), indices)
-
-    return atoms[mask], atoms[~mask]  # type: ignore
-
-
-def insert_atoms(atoms: Atoms, new_atoms: Atoms, indices: IntegerArray) -> None:
-    """Insert atoms into an Atoms object, in place.
+def reinsert_atoms(atoms: Atoms, new_atoms: Atoms, indices: IntegerArray) -> None:
+    """Reinsert atoms into an Atoms object, in place. This differs from pure insertion in that it assumes that `new_atoms` were previously removed from `atoms` at their old `indices`.
 
     Parameters
     ----------
@@ -100,26 +89,32 @@ def insert_atoms(atoms: Atoms, new_atoms: Atoms, indices: IntegerArray) -> None:
     new_atoms
         The Atoms object with the atoms to insert.
     indices
-        The indices where to insert the atoms.
+        The indices that `new_atoms` were previously removed from.
 
     Returns
     -------
     Atoms
-        The Atoms object with the inserted atoms.
+        The Atoms object with the reinserted atoms.
     """
-    if len(new_atoms) != len(indices):
-        raise ValueError(
-            "The number of indices must match the number of atoms to insert."
-        )
+    len_atoms = len(atoms)
+    len_new_atoms = len(new_atoms)
 
     for name in atoms.arrays:
-        new_array = (
+        array = (
             new_atoms.get_masses()
             if name == "masses"
             else new_atoms.arrays.get(name, 0)
         )
 
-        atoms.arrays[name] = np.insert(atoms.arrays[name], indices, new_array, axis=0)
+        new_array = np.zeros(
+            (len_atoms + len_new_atoms, *array.shape[1:]),
+            dtype=atoms.arrays[name].dtype,
+        )
+        mask = np.ones(len(new_array), dtype=bool)
+        mask[indices] = False
+        new_array[mask] = atoms.arrays[name]
+        new_array[indices] = array
+        atoms.arrays[name] = new_array
 
     for name, array in new_atoms.arrays.items():
         if name not in atoms.arrays:
