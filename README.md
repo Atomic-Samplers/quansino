@@ -1,9 +1,9 @@
 <div align="center">
-  <img src=docs/images/quansino_logo.png width="500"><br>
+  <img src=https://raw.githubusercontent.com/Atomic-Samplers/quansino/refs/heads/main/docs/images/quansino_logo.png width="500"><br>
 </div>
 
 <div align="center">
-  <h1><code>quansino</code> :game_die:</h1>
+  <h1><code>quansino</code> 🎲</h1>
   <p><i>Modular Stochastic Simulations for Atomistic Modelling</i></p>
 </div>
 
@@ -18,20 +18,20 @@
 
 `quansino` is a modern simulation framework based on the Atomic Simulation Environment (ASE) designed for both material science and molecular systems. It combines the reliability of established Monte Carlo and general sampling methods with an intuitive, and flexible Python interface.
 
-## Key Features :slot_machine:
+## Key Features 🎰
 
 - Perform (grand) canonical, isobaric, and other ensemble simulations. The framework allows designing custom ensembles and custom parametrization for subsystems or degrees of freedom.
 - Include algorithm for efficient sampling of complex energy landscapes, such as basin-hopping, and force-biased Monte Carlo.
 - Being based on ASE, `quansino` supports a wide range of DFT codes and force fields.
 
-## Documentation :8ball:
+## Documentation 🎱
 
 The full documentation can be found [here](https://atomic-samplers.github.io/quansino/), and includes detailed instructions about:
 
-- :gear: [Installation](https://atomic-samplers.github.io/quansino/installation/install.html)
-- :eyes: [Overview](https://atomic-samplers.github.io/quansino/documentation/overview.html)
-- :thought_balloon: [Examples](https://atomic-samplers.github.io/quansino/documentation/examples.html)
+- 🔧 [Installation](https://atomic-samplers.github.io/quansino/installation/install.html)
+- 📖 [Overview](https://atomic-samplers.github.io/quansino/documentation/overview.html)
+- 💡 [Examples](https://atomic-samplers.github.io/quansino/documentation/examples.html)
 
-## License :black_joker:
+## License 🃏
 
 This project is licensed under the terms of the BSD 3-Clause license.
