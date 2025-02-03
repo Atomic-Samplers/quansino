@@ -105,9 +105,9 @@ class MonteCarlo(Dynamics):
         else:
             self.default_logger = None
 
-        assert (
-            self.atoms.calc is not None
-        ), "Atoms object must have a calculator attached"
+        assert self.atoms.calc is not None, (
+            "Atoms object must have a calculator attached"
+        )
 
     def add_move(
         self,
