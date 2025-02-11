@@ -16,9 +16,9 @@ def test_logger():
     string_io = StringIO()
 
     logger = Logger(string_io)
-    logger.add_field("Class", lambda: "GrandCanonicalMC", str_format="<24s")
+    logger.add_field("Class", lambda: "GrandCanonicalMC", str_format="{:<24s}")
     logger.add_field("Epot[eV]", lambda: 123141.0)
-    logger.add_field("Step", lambda: 1, str_format=">12d")
+    logger.add_field("Step", lambda: 1, str_format="{:>12d}")
     logger.write_header()
 
     logger()
@@ -26,8 +26,12 @@ def test_logger():
     header = string_io.getvalue().split("\n")[0]
     values = string_io.getvalue().split("\n")[1]
 
-    assert header == "Class" + " " * 24 + "Epot[eV]" + " " * 9 + "Step"
-    assert values == "GrandCanonicalMC" + " " * 10 + "123141.0000" + " " * 12 + "1"
+    assert header == "Class" + " " * 22 + "Epot[eV]" + " " * 9 + "Step"
+    assert values == "GrandCanonicalMC" + " " * 9 + "123141.000" + " " * 12 + "1"
+
+    logger.remove_fields("Epot[eV]")
+
+    assert "Epot[eV]" not in logger.fields
 
 
 def test_opt_custom_logger(bulk_small):
@@ -39,12 +43,12 @@ def test_opt_custom_logger(bulk_small):
 
     def negative_omega():
         if opt.nsteps > 0:
-            return str(np.any(np.linalg.eigh(opt.H)[0] < 0))
+            return str(np.any(np.linalg.eigh(opt.H)[0] < 0))  # type: ignore
         else:
             return "N/A"
 
     logger.add_opt_fields(opt)
-    logger.add_field("NegativeEigenvalues", negative_omega, str_format=">22s")
+    logger.add_field("NegativeEigenvalues", negative_omega, str_format="{:>22s}")
     opt.attach(logger)
 
     logger.write_header()
@@ -78,15 +82,7 @@ def test_md_logger(bulk_small):
 
     assert (
         header
-        == "Time[ps]"
-        + " " * 9
-        + "Etot[eV]"
-        + " " * 5
-        + "Epot[eV]"
-        + " " * 5
-        + "Ekin[eV]"
-        + " " * 7
-        + "T[K]"
+        == "Time[ps]" + " " * 9 + "Epot[eV]" + " " * 5 + "Ekin[eV]" + " " * 9 + "T[K]"
     )
 
     string_io.close()
@@ -117,14 +113,14 @@ def test_opt_stress_logger(bulk_small):
 
     pos = string_io.tell()
 
-    assert "xxStress[GPa]" in logger_lines
-    assert "yyStress[GPa]" in logger_lines
-    assert "zzStress[GPa]" in logger_lines
-    assert "yzStress[GPa]" in logger_lines
-    assert "xzStress[GPa]" in logger_lines
-    assert "xyStress[GPa]" in logger_lines
+    assert "Stress[xx][GPa]" in logger_lines
+    assert "Stress[yy][GPa]" in logger_lines
+    assert "Stress[zz][GPa]" in logger_lines
+    assert "Stress[yz][GPa]" in logger_lines
+    assert "Stress[xz][GPa]" in logger_lines
+    assert "Stress[xy][GPa]" in logger_lines
 
-    logger.remove_fields("yyStress[GPa]")
+    logger.remove_fields("Stress[yy][GPa]")
     logger.add_stress_fields(bulk_small, mask=[False, False, False, False, False, True])
 
     logger.write_header()
@@ -134,11 +130,11 @@ def test_opt_stress_logger(bulk_small):
     string_io.seek(pos)
     new_logger_lines = string_io.read()
 
-    assert "xxStress[GPa]" not in new_logger_lines
-    assert "yyStress[GPa]" not in new_logger_lines
-    assert "zzStress[GPa]" not in new_logger_lines
-    assert "yzStress[GPa]" not in new_logger_lines
-    assert "xzStress[GPa]" not in new_logger_lines
-    assert "xyStress[GPa]" in new_logger_lines
+    assert "Stress[xx][GPa]" not in new_logger_lines
+    assert "Stress[yy][GPa]" not in new_logger_lines
+    assert "Stress[zz][GPa]" not in new_logger_lines
+    assert "Stress[yz][GPa]" not in new_logger_lines
+    assert "Stress[xz][GPa]" not in new_logger_lines
+    assert "Stress[xy][GPa]" in new_logger_lines
 
     string_io.close()

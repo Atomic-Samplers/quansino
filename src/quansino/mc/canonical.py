@@ -1,134 +1,187 @@
-"""Module to perform canonical (NVT) Monte Carlo simulation."""
+"""Module to perform canonical (NVT) Monte Carlo simulations."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import math
+from typing import TYPE_CHECKING, Any, ClassVar
 
-import numpy as np
 from ase.units import kB
 
-from quansino.mc.core import MonteCarlo
-from quansino.moves.core import BaseMove
-from quansino.moves.displacements import DisplacementMove
+from quansino.mc.contexts import DisplacementContext
+from quansino.mc.core import AcceptanceCriteria, MonteCarlo, MoveStorage
+from quansino.moves.displacements import CompositeDisplacementMove, DisplacementMove
 
 if TYPE_CHECKING:
-    from typing import Any
+    from collections.abc import Generator
 
     from ase.atoms import Atoms
+    from numpy.random import Generator as RNG
 
-    from quansino.typing import Positions
+
+class MetropolisCriteria(AcceptanceCriteria[DisplacementContext]):
+    """Default criteria for accepting or rejecting a Monte Carlo move in the canonical ensemble."""
+
+    def evaluate(self, context, energy_difference: float) -> bool:
+        """
+        Evaluate the acceptance criteria for a Monte Carlo move.
+
+        Parameters
+        ----------
+        context : DisplacementContext
+            The context of the Monte Carlo simulation.
+        energy_difference : float
+            The energy difference between the current and proposed states.
+
+        Returns
+        -------
+        bool
+            True if the move is accepted, False otherwise.
+        """
+        return energy_difference < 0 or context.rng.random() < math.exp(
+            -energy_difference / (context.temperature * kB)
+        )
 
 
-class Canonical(MonteCarlo):
-    """Canonical Monte Carlo simulation object.
+class Canonical[
+    MoveType: DisplacementMove | CompositeDisplacementMove,
+    ContextType: DisplacementContext,
+](MonteCarlo[MoveType, ContextType]):
+    """
+    Canonical Monte Carlo simulation object.
 
     Parameters
     ----------
     atoms : Atoms
-        The atoms object to perform the simulation on, will be act upon in place.
+        The atoms object to perform the simulation on, will be acted upon in place.
     temperature : float
         The temperature of the simulation in Kelvin.
     num_cycles : int, optional
         The number of Monte Carlo cycles to perform, by default equal to the number of atoms.
-    moves : list[BaseMove] | BaseMove, optional
-        The moves to perform in each cycle, by default a single DisplacementMove acting on all atoms. The move provided should be a subclass of [`BaseMove`][quansino.moves.core.BaseMove] and will have an equal probability of being selected and run at each cycle. To modify the probability of a move being selected, either use the [`add_move`][quansino.mc.core.MonteCarlo.add_move] method or modify the `move_probabilities` attribute.
+    default_move : MoveStorage[MoveType, ContextType] | MoveType, optional
+        The default move to perform in each cycle. If a `MoveStorage` object is provided, it will be used to initialize the move with its criteria and other parameters. If a `MoveType` object is provided, it will be added using the default criteria and parameters, by default None.
     **mc_kwargs
-        Additional keyword arguments to pass to the MonteCarlo superclass. See [`MonteCarlo`][quansino.mc.core.MonteCarlo] for more information.
+        Additional keyword arguments to pass to the [`MonteCarlo`][quansino.mc.core.MonteCarlo] parent class.
 
     Attributes
     ----------
-    temperature : float
-        The temperature of the simulation in Kelvin.
+    acceptable_moves : ClassVar[dict[DisplacementMove, MetropolisCriteria]]
+        The acceptable moves for the simulation.
+    accepted_moves : list[str]
+        The names of the moves that were accepted in the last step.
     acceptance_rate : float
-        The acceptance rate of the moves performed in the last cycle.
-    last_positions : Positions
-        The positions of the atoms since the last accepted move.
-    last_results : dict[str, Any]
-        The results of the atoms since the last accepted move.
-
-    Notes
-    -----
-    This Class assumes that the atoms object has a calculator attached to it, and possess the `atoms` and `results` attributes.
+        The acceptance rate of the moves in the last step.
     """
+
+    acceptable_moves: ClassVar = {DisplacementMove: MetropolisCriteria}
 
     def __init__(
         self,
         atoms: Atoms,
         temperature: float,
         num_cycles: int | None = None,
-        moves: dict[str, BaseMove] | list[BaseMove] | BaseMove | None = None,
+        default_move: MoveStorage[MoveType, ContextType] | MoveType | None = None,
         **mc_kwargs,
     ) -> None:
         """Initialize the Canonical Monte Carlo object."""
-        self.temperature: float = temperature
-
         if num_cycles is None:
             num_cycles = len(atoms)
 
-        if moves is None:
-            moves = {
-                "default": DisplacementMove(candidate_indices=np.arange(len(atoms)))
-            }
-
         super().__init__(atoms, num_cycles=num_cycles, **mc_kwargs)
 
-        if isinstance(moves, BaseMove):
-            moves = [moves]
-        if isinstance(moves, list):
-            moves = {
-                f"{move.__class__.__name__}_{index}": move
-                for index, move in enumerate(moves)
-            }
+        self.context.temperature = temperature
 
-        for name, move in moves.items():
-            self.add_move(move, name=name)
-
-        self.last_positions: Positions = self.atoms.get_positions()
-        self.last_results: dict[str, Any] = {}
-
-        self.acceptance_rate: float = 0
+        if isinstance(default_move, DisplacementMove):
+            self.add_move(default_move, name="default_move")
+        elif isinstance(default_move, MoveStorage):
+            self.add_move(
+                default_move.move,
+                default_move.criteria,
+                "default_move",
+                default_move.interval,
+                default_move.probability,
+                default_move.minimum_count,
+            )
 
         if self.default_logger:
             self.default_logger.add_field("AcptRate", lambda: self.acceptance_rate)
 
-    def todict(self) -> dict:
-        """Return a dictionary representation of the object."""
-        return {"temperature": self.temperature, **super().todict()}
+    @property
+    def temperature(self) -> float:
+        """The temperature of the simulation in Kelvin."""
+        return self.context.temperature
 
-    def get_metropolis_criteria(self, energy_difference: float) -> bool:
-        """Return whether the move should be accepted based on the Metropolis criteria.
+    @temperature.setter
+    def temperature(self, temperature: float) -> None:
+        """Set the temperature of the simulation in Kelvin."""
+        self.context.temperature = temperature
+
+    def calculate_energy_difference(self) -> float:
+        """
+        Calculate the energy difference between the current and last state.
+
+        Returns
+        -------
+        float
+            The energy difference.
+        """
+        return self.atoms.get_potential_energy() - self.context.last_results["energy"]
+
+    def yield_moves(self) -> Generator[str, None, None]:
+        """
+        Yield the names of accepted moves after evaluating their acceptance criteria.
+
+        Yields
+        ------
+        Generator[str, None, None]
+            The names of the accepted moves.
+        """
+        for move_name in super().yield_moves():
+            move_storage = self.moves[move_name]
+            move = move_storage.move
+
+            if move():
+                energy_difference = self.calculate_energy_difference()
+
+                is_accepted = move_storage.criteria.evaluate(
+                    self.context, energy_difference
+                )
+
+                if is_accepted:
+                    self.context.save_state()
+                    yield move_name
+                else:
+                    self.context.revert_state()
+
+    def create_context(self, atoms: Atoms, rng: RNG) -> DisplacementContext:
+        """
+        Create a displacement context for the simulation.
 
         Parameters
         ----------
-        energy_difference : float
-            The difference in energy between the current and the previous state.
+        atoms : Atoms
+            The atomic configuration.
+        rng : RNG
+            The random number generator.
+
+        Returns
+        -------
+        DisplacementContext
+            The context for the Monte Carlo simulation.
         """
-        return energy_difference < 0 or self._rng.random() < np.exp(
-            -energy_difference / (self.temperature * kB)
-        )
+        return DisplacementContext(atoms, rng)
 
-    def step(self):  # type: ignore
-        """Perform a single Monte Carlo step, iterating over all selected moves. Due to the caching performed by ASE in calculators, the atoms object of the calculator is updated as well."""
-        self.acceptance_rate = 0
-
-        if not self.last_results.get("energy", None):
+    def pre_step(self) -> None:
+        """Perform operations before the Monte Carlo step."""
+        if not self.context.last_results.get("energy", None):
             self.atoms.get_potential_energy()
-            self.last_results = self.atoms.calc.results  # type: ignore
+            self.context.last_results = self.atoms.calc.results  # type: ignore
 
-        self.last_positions = self.atoms.get_positions()
+        self.context.last_positions = self.atoms.get_positions()
 
-        for move in self.yield_moves():
-            if move:
-                self.current_energy = self.atoms.get_potential_energy()
-                energy_difference = self.current_energy - self.last_results["energy"]
+    def step(self) -> Any:
+        """Perform a single Monte Carlo step, iterating over all selected moves."""
+        self.pre_step()
 
-                if self.get_metropolis_criteria(energy_difference):
-                    self.last_positions = self.atoms.get_positions()
-                    self.last_results = self.atoms.calc.results  # type: ignore # same as above
-                    self.acceptance_rate += 1
-                else:
-                    self.atoms.positions = self.last_positions
-                    self.atoms.calc.atoms.positions = self.last_positions  # type: ignore # same as above # copy needed ?
-                    self.atoms.calc.results = self.last_results  # type: ignore # same as above
+        self.accepted_moves = list(self.yield_moves())
 
-        self.acceptance_rate /= self.num_cycles
+        self.acceptance_rate = len(self.accepted_moves) / self.num_cycles

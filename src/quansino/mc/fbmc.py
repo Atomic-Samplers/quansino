@@ -17,9 +17,12 @@ if TYPE_CHECKING:
     from ase.atoms import Atoms
     from numpy.typing import NDArray
 
+    from quansino.type_hints import Displacement, Forces, Masses
+
 
 class ForceBias(MonteCarlo):
-    """Force Bias Monte Carlo class to perform simulations as described in
+    """
+    Force Bias Monte Carlo class to perform simulations as described in
     https://doi.org/10.1063/1.4902136.
 
     Parameters
@@ -30,12 +33,12 @@ class ForceBias(MonteCarlo):
         Delta parameter in Angstrom which influence how much the atoms are moved.
     temperature: float
         The temperature of the simulation in Kelvin. Default: 298.15.
-    seed: int | None
-        Seed for the random number generator, None for random seed. Default: None.
+    **mc_kwargs
+        Additional keyword arguments to pass to the MonteCarlo superclass. See [`MonteCarlo`][quansino.mc.core.MonteCarlo] for more information.
 
     Attributes
     ----------
-    GAMMA_MAX_VALUE: float
+    gamma_max_value: float
         Maximum value for the gamma parameter, used to avoid overflow errors.
     delta: float
         Delta parameter in Angstrom which influence how much the atoms are moved.
@@ -43,21 +46,21 @@ class ForceBias(MonteCarlo):
         The temperature of the simulation in Kelvin.
     """
 
-    GAMMA_MAX_VALUE = 709.782712
+    gamma_max_value = 709.782712
 
     def __init__(
         self, atoms: Atoms, delta: float, temperature: float = 298.15, **mc_kwargs
     ) -> None:
         """Initialize the Force Bias Monte Carlo object."""
         self.delta = delta
-        self.temperature = temperature * kB
+        self.temperature = temperature
 
-        self._size = (atoms.get_global_number_of_atoms(), 3)
+        self.size = (len(atoms), 3)
+
         self.update_masses(atoms.get_masses())
+        self.set_masses_scaling_power(np.full((len(atoms), 3), 0.25))
 
-        self.masses_scaling_power = 0.25
-
-        MonteCarlo.__init__(self, atoms, **mc_kwargs)
+        super().__init__(atoms, **mc_kwargs)
 
         if not has_constraint(self.atoms, "FixCom"):
             warn(
@@ -70,12 +73,15 @@ class ForceBias(MonteCarlo):
         if self.default_logger:
             self.default_logger.add_field(
                 "Gamma/GammaMax",
-                lambda: np.max(np.abs(self.gamma / self.GAMMA_MAX_VALUE)),
+                lambda: np.max(np.abs(self.gamma / self.gamma_max_value)),
                 str_format=">16.2f",
             )
 
-    def _calculate_gamma(self, forces: NDArray[np.floating]) -> None:
-        """Calculate the gamma parameter for the Monte Carlo step, along with the denominator for the trial probability.
+        self.current_size = self.size
+
+    def calculate_gamma(self, forces: NDArray[np.floating]) -> None:
+        """
+        Calculate the gamma parameter for the Monte Carlo step, along with the denominator for the trial probability.
 
         Parameters
         ----------
@@ -83,19 +89,19 @@ class ForceBias(MonteCarlo):
             The forces acting on the atoms.
         """
         self.gamma = np.clip(
-            (forces * self.delta) / (2 * self.temperature),
-            -self.GAMMA_MAX_VALUE,
-            self.GAMMA_MAX_VALUE,
+            (forces * self.delta) / (2 * self.temperature * kB),
+            -self.gamma_max_value,
+            self.gamma_max_value,
         )
 
         self.denominator = np.exp(self.gamma) - np.exp(-self.gamma)
 
-    def todict(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Return a dictionary representation of the object."""
-        dictionary = MonteCarlo.todict(self)
+        dictionary = MonteCarlo.to_dict(self)
         dictionary.update(
             {
-                "temperature": self.temperature / kB,
+                "temperature": self.temperature,
                 "delta": self.delta,
                 "masses_scaling_power": self.masses_scaling_power,
             }
@@ -103,83 +109,92 @@ class ForceBias(MonteCarlo):
 
         return dictionary
 
-    @property
-    def masses_scaling_power(self) -> NDArray[np.floating]:
-        """Get the power of the masses scaling factor.
-
-        The property can be set as a float, a dictionary with the element symbol as
-        key and the power as value, or a numpy array with the power for each atom.
-        """
-        return self._masses_scaling_power
-
-    @masses_scaling_power.setter
-    def masses_scaling_power(
-        self, value: dict[str, float] | NDArray[np.floating] | float
+    def set_masses_scaling_power(
+        self, value: dict[str, float] | NDArray | float
     ) -> None:
         if isinstance(value, dict):
-            self._masses_scaling_power = np.full(self._size, 0.25)
+            self.masses_scaling_power = np.full(self.size, 0.25)
 
             for el in np.unique(self.atoms.symbols):
                 indices = self.atoms.symbols == el
-                self._masses_scaling_power[indices, :] = value.get(el, 0.25)
+                self.masses_scaling_power[indices, :] = value.get(el, 0.25)
 
         elif isinstance(value, float | np.floating):
-            self._masses_scaling_power = np.full(self._size, value)
+            self.masses_scaling_power = np.full(self.size, value)
         elif isinstance(value, np.ndarray):
-            assert value.shape == self._size
-            self._masses_scaling_power = value
+            if value.shape != self.size:
+                raise ValueError(
+                    f"Invalid shape for masses_scaling_power. Expected {self.size}, got {value.shape}."
+                )
+
+            self.masses_scaling_power = value
         else:
             raise ValueError("Invalid value type for masses_scaling_power.")
 
-        self._mass_scaling = np.power(
-            np.min(self._masses) / self._masses, self._masses_scaling_power
+        self.mass_scaling = np.power(
+            np.min(self.shaped_masses) / self.shaped_masses, self.masses_scaling_power
         )
 
-    def update_masses(self, masses: NDArray | None = None) -> None:
+    def update_masses(self, masses: Masses | None = None) -> None:
         if masses is None:
             masses = self.atoms.get_masses()
 
-        self._masses = np.broadcast_to(masses[:, np.newaxis], self._size)
+        if masses.ndim == 1:
+            masses = np.broadcast_to(masses[:, np.newaxis], self.size)
 
-    def step(self) -> NDArray[np.floating]:  # type: ignore
+        self.shaped_masses = masses
+
+    def step(self) -> Forces:  # type: ignore
         """Perform one Force Bias Monte Carlo step."""
         forces = self.atoms.get_forces()
         positions = self.atoms.get_positions()
-        self._size = (self.atoms.get_global_number_of_atoms(), 3)
-        self._calculate_gamma(forces)
 
-        self.zeta = self._get_zeta()
+        self.current_size = (len(self.atoms), 3)
 
-        probability_random = self._get_random()
-        converged = self._calculate_trial_probability() > probability_random
+        self.calculate_gamma(forces)
+
+        self.zeta = self.get_zeta()
+
+        probability_random = self._rng.random(self.current_size)
+        converged = self.calculate_trial_probability() > probability_random
 
         while not np.all(converged):
-            self._size = probability_random[~converged].shape
-            self.zeta[~converged] = self._get_zeta()
+            self.current_size = probability_random[~converged].shape
+            self.zeta[~converged] = self.get_zeta()
 
-            probability_random[~converged] = self._get_random()
+            probability_random[~converged] = self._rng.random(self.current_size)
 
-            converged = self._calculate_trial_probability() > probability_random
+            converged = self.calculate_trial_probability() > probability_random
 
-        displacement = self.zeta * self.delta * self._mass_scaling
+        displacement = self.zeta * self.delta * self.mass_scaling
 
-        self.atoms.set_momenta(self._masses * displacement)
-        corrected_displacement = self.atoms.get_momenta() / self._masses
+        self.atoms.set_momenta(self.shaped_masses * displacement)
+        corrected_displacement = self.atoms.get_momenta() / self.shaped_masses
 
         self.atoms.set_positions(positions + corrected_displacement)
 
         return forces
 
-    def _get_zeta(self) -> NDArray[np.floating]:
-        """Get the zeta parameter for the Monte Carlo step."""
-        return self._rng.uniform(-1, 1, self._size)  # type: ignore
+    def get_zeta(self) -> Displacement:
+        """
+        Get the zeta parameter for the Monte Carlo step.
 
-    def _get_random(self) -> NDArray[np.floating]:
-        """Get the random parameter for the Monte Carlo step."""
-        return self._rng.random(self._size)  # type: ignore
+        Returns
+        -------
+        Displacement
+            The zeta parameter.
+        """
+        return self._rng.uniform(-1, 1, self.current_size)
 
-    def _calculate_trial_probability(self) -> NDArray[np.floating]:
-        """Calculate the trial probability for the Monte Carlo step."""
+    def calculate_trial_probability(self) -> NDArray:
+        """
+        Calculate the trial probability for the Monte Carlo step.
+
+        Returns
+        -------
+        NDArray[np.floating]
+            The trial probability.
+        """
         sign_zeta = np.sign(self.zeta)
 
         probability_trial = np.exp(sign_zeta * self.gamma) - np.exp(

@@ -31,11 +31,11 @@ class Logger(IOContext):
     configure the fields to log.
 
     Callable required for [`add_field`][quansino.io.logger.Logger.add_field] can be
-    easily created with lambda functions that return the desired value. For example,
+    easily created by calling functions to obtain the desired value. For example,
     to log the current energy of an ASE atoms object, use:
 
     ``` python
-    logger.add_field("Epot[eV]", lambda: atoms.get_potential_energy())
+    logger.add_field("Epot[eV]", atoms.get_potential_energy)
     ```
 
     The logger can also be configured using convenience methods, such as
@@ -48,7 +48,7 @@ class Logger(IOContext):
     logfile: IO | str | Path
         File path or open file object for logging, use "-" for standard output.
     mode: str
-        File opening mode if logfile is a filename.
+        File opening mode if logfile is a filename or path.
     comm: Any
         MPI communicator for parallel simulations.
 
@@ -62,29 +62,67 @@ class Logger(IOContext):
         convenience methods such as
         [`add_mc_fields`][quansino.io.logger.Logger.add_mc_fields] and
         [`add_opt_fields`][quansino.io.logger.Logger.add_opt_fields].
-    fields_string_format
-        Dictionary of string formats for fields.
     """
 
     def __init__(
         self, logfile: IO | str | Path, mode: str = "a", comm: Any = world
     ) -> None:
-        """Initialize the logger."""
-        self.fields = {}
-        self.fields_string_format = {}
+        """Initialize the molecular dynamics logger."""
+        self.fields: dict[str | tuple[str, ...], Any] = {}
         self.logfile = self.openfile(logfile, mode=mode, comm=comm)
 
-        self._field_cache = {}
-        self._is_field_list = {}
+    def __call__(self) -> None:
+        """
+        Log the current state of the simulation. Writes a new line to the log file containing the current values of all configured fields.
+        """
+        parts = []
+
+        for key in self.fields:
+            value = self.fields[key]["function"]()
+
+            if self.fields[key]["is_list"]:
+                parts.append(self.fields[key]["str_format"].format(*value))
+            else:
+                parts.append(self.fields[key]["str_format"].format(value))
+
+        self.logfile.write(" ".join(parts) + "\n")
+        self.logfile.flush()
+
+    def __del__(self) -> None:
+        """Clean up by closing the log file."""
+        self.close()
+
+    def create_header(self) -> str:
+        """
+        Create the header format string based on configured options.
+
+        Returns
+        -------
+        str
+            Formatted header string.
+        """
+        to_write = []
+
+        for name in self.fields:
+            header_format = self.fields[name]["header_format"]
+            if self.fields[name]["is_list"]:
+                to_write.append(header_format.format(*name))
+            else:
+                to_write.append(header_format.format(name))
+
+        return " ".join(to_write)
 
     def add_field(
         self,
-        name: str | list[str],
-        function: Callable,
-        str_format: str | list[str] = "12.4f",
+        name: str | list[str] | tuple[str, ...],
+        function: Callable[[], Any],
+        str_format: str = "{:10.3f}",
+        header_format: str | None = None,
+        is_list: bool = False,
     ) -> None:
         """
-        Add a field to the logger, tracking the value returned by a callable object.
+        Add one field to the logger, which track a value that
+        changes during the simulation.
 
         Parameters
         ----------
@@ -94,41 +132,42 @@ class Logger(IOContext):
             Callable object returning the value of the field.
         str_format
             Format string for field value.
+        header_format
+            Format string for field name in the header line.
+        is_list
+            Whether the field's function returns a list of values.
 
         Examples
         --------
         ``` python
-        logger.add_field("Epot[eV]", lambda: atoms.get_potential_energy())
+        logger.add_field("Epot[eV]", atoms.get_potential_energy)
         logger.add_field(
-            ["Class", "Step"],
-            [lambda: simulation.__class__.__name__, lambda: simulation.nsteps],
-            [">12s", ">12d"],
-        )
-        logger.add_field(
-            ["MovingAtoms[N]", "Econs[eV]"],
-            [
-                lambda: len(simulation.indices),
-                lambda: simulation.transfered_energy - simulation.atoms.get_potential_energy(),
-            ],
-            [">12d", ">12.4f"],
+            "Class",
+            lambda: simulation.__class__.__name__,
+            "{:>12s}",
         )
         ```
-        """
-        if isinstance(name, list | tuple | np.ndarray):
-            assert isinstance(str_format, list | tuple | np.ndarray)
-            assert len(name) == len(str_format)
-            self._is_field_list[function] = True
-        else:
-            self._is_field_list[function] = False
 
-        self.fields[function] = name
-        self.fields_string_format[function] = str_format
-        self._build_format_cache(function)
+        Notes
+        -----
+        The callable can return a list of values to log arrays or vectors. In this case, `name` should be a list or tuple of strings, and `str_format` should be a format string with the same number of placeholders as the length of the list. The `is_list` parameter should be set to `True`.
+        """
+        if isinstance(name, list):
+            name = tuple(name)
+
+        if header_format is None:
+            header_format = get_auto_header_format(str_format)
+
+        self.fields[name] = {
+            "function": function,
+            "str_format": str_format,
+            "header_format": header_format,
+            "is_list": is_list,
+        }
 
     def add_mc_fields(self, simulation: MonteCarlo) -> None:
         """
-        Convenience function to add commonly used fields for Monte Carlo simulation,
-        add the following fields to the logger:
+        Convenience function to add commonly used fields for [`MonteCarlo`][quansino.mc.core.MonteCarlo] simulation, add the following fields to the logger:
 
         - Class: The name of the simulation class.
         - Step: The current simulation step.
@@ -137,11 +176,11 @@ class Logger(IOContext):
         Parameters
         ----------
         simulation
-            The Monte Carlo simulation object.
+            The `MonteCarlo` simulation object.
         """
         names = ["Step", "Epot[eV]"]
         functions = [lambda: simulation.nsteps, simulation.atoms.get_potential_energy]
-        str_formats = ["<12d", ">12.4f"]
+        str_formats = ["{:<12d}", "{:>12.4f}"]
 
         for name, function, str_format in zip(
             names, functions, str_formats, strict=False
@@ -150,11 +189,9 @@ class Logger(IOContext):
 
     def add_md_fields(self, dyn: MolecularDynamics) -> None:
         """
-        Convenience function to add commonly used fields for MD simulations, add the
-        following fields to the logger:
+        Convenience function to add commonly used fields for Molecular Dynamics simulations, add the following fields to the logger:
 
         - Time[ps]: The current simulation time in picoseconds.
-        - Etot[eV]: The current total energy.
         - Epot[eV]: The current potential energy.
         - Ekin[eV]: The current kinetic energy.
         - T[K]: The current temperature.
@@ -162,17 +199,16 @@ class Logger(IOContext):
         Parameters
         ----------
         dyn
-            The :class:~ase.md.md.MolecularDynamics` object.
+            The ASE `MolecularDynamics` object.
         """
-        names = ["Time[ps]", "Etot[eV]", "Epot[eV]", "Ekin[eV]", "T[K]"]
+        names = ["Time[ps]", "Epot[eV]", "Ekin[eV]", "T[K]"]
         functions = [
             lambda: dyn.get_time() / (1000 * units.fs),
-            dyn.atoms.get_total_energy,
             dyn.atoms.get_potential_energy,
             dyn.atoms.get_kinetic_energy,
             dyn.atoms.get_temperature,
         ]
-        str_formats = ["<12.4f"] + [">12.4f"] * 3 + [">10.2f"]
+        str_formats = ["{:<12.4f}"] + ["{:>12.4f}"] * 3 + ["{:>10.2f}"]
 
         for name, function, str_format in zip(
             names, functions, str_formats, strict=False
@@ -193,7 +229,7 @@ class Logger(IOContext):
         Parameters
         ----------
         optimizer
-            The ASE optimizer object.
+            The ASE `Optimizer` object.
         """
         names = ["Optimizer", "Step", "Time", "Epot[eV]", "Fmax[eV/A]"]
         functions = [
@@ -203,7 +239,7 @@ class Logger(IOContext):
             optimizer.optimizable.get_potential_energy,
             lambda: np.linalg.norm(optimizer.optimizable.get_forces(), axis=1).max(),
         ]
-        str_formats = ["<24s"] + [">4d"] + [">12s"] + [">12.4f"] * 2
+        str_formats = ["{:<24s}"] + ["{:>4d}"] + ["{:>12s}"] + ["{:>12.4f}"] * 2
 
         for name, function, str_format in zip(
             names, functions, str_formats, strict=False
@@ -217,14 +253,26 @@ class Logger(IOContext):
         mask: list[bool] | None = None,
     ) -> None:
         """
-        Add the stress fields to the logger.
+        Add stress fields to the logger, add the following fields to the logger:
+
+        - Stress[xx][GPa]: The xx component of the stress tensor.
+        - Stress[yy][GPa]: The yy component of the stress tensor.
+        - Stress[zz][GPa]: The zz component of the stress tensor.
+        - Stress[yz][GPa]: The yz component of the stress tensor.
+        - Stress[xz][GPa]: The xz component of the stress tensor.
+        - Stress[xy][GPa]: The xy component of the stress tensor.
+
+        These can be masked using the `mask` parameter.
 
         Parameters
         ----------
-        atoms
+        atoms : Atoms
             The ASE atoms object.
-        include_ideal_gas
+        include_ideal_gas : bool, optional
             Whether to include the ideal gas contribution to the stress.
+        mask : list[bool], optional
+            A list of booleans to mask the stress components to log.
+            The default is to log all components.
         """
         if mask is None:
             mask = [True] * 6
@@ -237,96 +285,33 @@ class Logger(IOContext):
         components = ["xx", "yy", "zz", "yz", "xz", "xy"]
 
         names = [
-            f"{component}Stress[GPa]"
+            f"Stress[{component}][GPa]"
             for n, component in enumerate(components)
             if mask[n]
         ]
 
-        formats = [">14.3f"] * sum(mask)
+        formats = "{:>18.3f}" * sum(mask)
 
-        self.add_field(names, log_stress, formats)
+        self.add_field(names, log_stress, formats, is_list=True)
 
-    def remove_fields(self, name: str) -> None:
+    def remove_fields(self, pattern: str) -> None:
         """
-        Remove one or multiple field(s) from the logger. Work by finding partial
-        matches of the field name(s) in the current fields. List fields count as a
-        single field, i.e., if a match is found in a list field, the whole list field
-        is removed
+        Remove fields whose names contain the given pattern.
 
         Parameters
         ----------
-        name
-            Name of the field to remove.
+        pattern : str
+            Pattern to match in field names. For compound fields
+            (tuple of names), matches if any component contains the pattern.
         """
-        for func, field_name in list(self.fields.items()):
-            if name in field_name:
-                self.fields.pop(func, None)
-                self.fields_string_format.pop(func, None)
-                self._field_cache.pop(func, None)
+        for field_name in list(self.fields.keys()):
+            if isinstance(field_name, tuple):
+                if any(pattern in name for name in field_name):
+                    self.fields.pop(field_name)
+            else:
+                if pattern in field_name:
+                    self.fields.pop(field_name)
 
     def write_header(self) -> None:
         """Write the header line to the log file."""
-        self.logfile.write(f"{self._create_header_format()}\n")
-
-    def _build_format_cache(self, key: Callable) -> None:
-        """Build the format cache for a field.
-
-        Parameters
-        ----------
-        key: Callable
-            The field to build the cache for.
-        """
-        if self._is_field_list[key]:
-            self._field_cache[key] = " ".join(
-                f"{{:{f}}}" for f in self.fields_string_format[key]
-            )
-        else:
-            self._field_cache[key] = f"{{:{self.fields_string_format[key]}}}"
-
-    def _create_header_format(self) -> str:
-        """
-        Create the header string based on configured fields.
-
-        Returns
-        -------
-        str
-            Formatted header string.
-        """
-        to_write = []
-
-        for key in self.fields:
-            name = self.fields[key]
-            str_format = self.fields_string_format[key]
-
-            if self._is_field_list[key]:
-                to_write.extend(
-                    [
-                        f"{n:{get_auto_header_format(fmt)}}"
-                        for n, fmt in zip(name, str_format, strict=False)
-                    ]
-                )
-            else:
-                to_write.append(f"{name:{get_auto_header_format(str_format)}}")
-
-        return " ".join(to_write)
-
-    def __call__(self) -> None:
-        """
-        Writes a new line to the log file containing the current values of all
-        configured fields.
-        """
-        to_write = [
-            (
-                self._field_cache[key].format(*key())
-                if self._is_field_list[key]
-                else self._field_cache[key].format(key())
-            )
-            for key in self.fields
-        ]
-
-        self.logfile.write(" ".join(to_write) + "\n")
-        self.logfile.flush()
-
-    def __del__(self) -> None:
-        """Close the log file on deletion."""
-        self.close()
+        self.logfile.write(f"{self.create_header()}\n")

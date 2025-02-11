@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+
 
 def get_auto_header_format(data_format: str) -> str:
     """
@@ -21,15 +23,8 @@ def get_auto_header_format(data_format: str) -> str:
     get_header_format('10.3f') -> '>10s'
     get_header_format('4s') -> '>4s'
     """
-    data_format = data_format.lstrip(":")
-
-    align = ">" if data_format[0] not in "<>^" else data_format[0]
-
-    width = ""
-    for char in data_format.lstrip("<>^"):
-        if char.isdigit():
-            width += char
-        else:
-            break
-
-    return f"{align}{width}s" if width else ">10s"
+    return re.sub(
+        r":([<>^])?(\d+)?[^}]*",
+        lambda m: f':{m.group(1) or ">"}{m.group(2) or "10"}s',
+        data_format,
+    )

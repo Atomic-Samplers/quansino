@@ -1,4 +1,5 @@
-"""Module for type hints.
+"""
+Module for type hints.
 
 This module provides type hints for various data structures used throughout the quansino package.
 These type hints help ensure type safety and improve code readability by clearly defining
@@ -7,7 +8,7 @@ the expected data types and structures.
 Examples
 --------
 ``` python
-from quansino.typing import Positions, Forces, Cell
+from quansino.type_hints import Positions, Forces, Cell
 
 positions: Positions = np.zeros((100, 3))
 forces: Forces = np.random.random((100, 3))

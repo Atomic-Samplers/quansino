@@ -2,100 +2,102 @@
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
+from collections.abc import Generator
+from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 from ase.optimize.optimize import Dynamics
-from numpy.random import PCG64, Generator
+from numpy.random import PCG64
+from numpy.random import Generator as RNG
 
 from quansino.io import Logger
-from quansino.mc.contexts import DisplacementContext
+from quansino.mc.contexts import Context
+from quansino.moves.core import BaseMove
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
     from typing import Any
 
     from ase.atoms import Atoms
 
-    from quansino.moves.core import BaseMove
+
+class AcceptanceCriteria[ContextType: Context](ABC):
+    """Base class for MC acceptance criteria."""
+
+    @abstractmethod
+    def evaluate(self, context: ContextType, energy_difference: float) -> bool: ...
 
 
-class MonteCarlo(Dynamics):
+class MonteCarlo[MoveType: BaseMove, ContextType: Context](Dynamics):
     """
-    Base-class for all Monte Carlo classes.
+    Base-class for all Monte Carlo classes. This is a common interface for all Monte Carlo classes, and
+    is not intended to be used directly. It is a subclass of the ASE Dynamics class,
+    and inherits all of its methods and attributes. The Monte Carlo class is responsible for selecting moves to perform via the [`yield_moves`][quansino.mc.core.MonteCarlo.yield_moves] method. This class is also responsible for managing the moves, their parameters (interval, probability, minimum count), and their acceptance criteria. Logging and trajectory writing are managed by the ASE parent class, Dynamics. When necessary, communication between the Monte Carlo simulation and the moves is facilitated by the context object. The Monte Carlo class and its subclasses should NOT directly modify the moves, but rather interact using the context object. The generics MoveType and ContextType are used to specify the type of move and context object, respectively. Moves themselves use a ContextType generics, the non-interaction between the Monte Carlo and the moves is enforced via the missing ContextType generics in the MoveType generics, i.e. The MonteCarlo class does not know what the context object of its moves is, only that it exists.
 
     Parameters
     ----------
     atoms: Atoms
         The Atoms object to operate on.
+    num_cycles: int
+        Number of Monte Carlo cycles per step.
     seed: int
         Seed for the random number generator.
     trajectory: str | Path | None
-        Trajectory file name to auto-attach. Default: None.
+        Trajectory file name to auto-attach.
     logfile: str | Path | None
-        Log file name to auto-attach. Default: None. Use '-' for stdout.
+        Log file name to auto-attach. Use '-' for stdout.
     append_trajectory: bool
-        Defaults to False, which causes the trajectory file to be
+        If false, causes the trajectory file to be
         overwriten each time the dynamics is restarted from scratch.
         If True, the new structures are appended to the trajectory
         file instead.
     loginterval: int
-        Number of steps between log entries. Default is 1.
+        Number of steps between log entries.
 
     Attributes
     ----------
-    moves: dict[str, BaseMove]
+    moves: dict[str, MoveStorage[MoveType, ContextType]]
         Dictionary of moves to perform.
-    move_intervals: dict[str, int]
-        Dictionary of intervals at which moves are attempted.
-    move_probabilities: dict[str, float]
-        Dictionary of probabilities of moves being attempted.
-    move_minimum_count: dict[str, int]
-        Dictionary of minimum number of times moves must be performed.
     _seed: int
         Seed for the random number generator.
     _rng: Generator
         Random number generator.
-
-    Notes
-    -----
-    The Monte Carlo class provides a common interface for all Monte Carlo classes, and
-    is not intended to be used directly. It is a subclass of the ASE Dynamics class,
-    and inherits all of its methods and attributes.
-
-    The Monte Carlo class is responsible for setting up the random number generator
-    which is set as a private attribute. The random number generator can be accessed
-    via the _MonteCarlo__rng attribute, but should not be modified directly.
+    num_cycles: int
+        Number of Monte Carlo cycles per step.
+    default_logger: Logger | None
+        Default logger object.
+    context: ContextType
+        Context object for the simulation used to store the state of the simulation and provide information to the moves/criteria.
     """
 
-    context = DisplacementContext
+    acceptable_moves: ClassVar[dict[type[BaseMove], type[AcceptanceCriteria]]] = {}
 
     def __init__(
         self,
         atoms: Atoms,
-        num_cycles=1,
+        num_cycles: int = 1,
         seed: int | None = None,
         trajectory: str | Path | None = None,
         logfile: str | Path | None = None,
         append_trajectory: bool = False,
         loginterval: int = 1,
     ) -> None:
-        """Initialize the Monte Carlo object."""
-        self.moves: dict[str, BaseMove] = {}
-        self.move_intervals: dict[str, int] = {}
-        self.move_probabilities: dict[str, float] = {}
-        self.move_minimum_count: dict[str, int] = {}
+        """Initialize the MonteCarlo object."""
+        self.moves: dict[str, MoveStorage[MoveType, ContextType]] = {}
 
         self._seed = seed or PCG64().random_raw()
-        self._rng = Generator(PCG64(seed))
+        self._rng = RNG(PCG64(seed))
 
         if isinstance(trajectory, Path):
             trajectory = str(trajectory)
 
         self.num_cycles = num_cycles
 
-        Dynamics.__init__(
-            self, atoms, trajectory=trajectory, append_trajectory=append_trajectory
+        super().__init__(
+            atoms, trajectory=trajectory, append_trajectory=append_trajectory
         )
 
         if logfile:
@@ -105,13 +107,12 @@ class MonteCarlo(Dynamics):
         else:
             self.default_logger = None
 
-        assert (
-            self.atoms.calc is not None
-        ), "Atoms object must have a calculator attached"
+        self.context: ContextType = self.create_context(atoms, self._rng)
 
     def add_move(
         self,
-        move: BaseMove,
+        move: MoveType,
+        criteria: AcceptanceCriteria[ContextType] | None = None,
         name: str = "default",
         interval: int = 1,
         probability: float = 1.0,
@@ -122,48 +123,95 @@ class MonteCarlo(Dynamics):
 
         Parameters
         ----------
-        move : BaseMove
+        move : MoveType
             The move to add to the Monte Carlo object.
+        criteria : AcceptanceCriteria[ContextType], optional
+            The acceptance criteria for the move. If none, the move must be an instance of a known move type.
         name : str
-            Name of the move. Default: 'default'.
+            Name of the move.
         interval : int
-            The interval at which the move is attempted. Default: 1.
+            The interval at which the move is attempted.
         probability : float
-            The probability of the move being attempted. Default: 1.0.
+            The probability of the move being attempted.
         minimum_count : int
-            The minimum number of times the move must be performed. Default: 0.
+            The minimum number of times the move must be performed.
         """
-        forced_moves_total_number = sum(list(self.move_minimum_count.values()))
-        assert forced_moves_total_number + minimum_count <= self.num_cycles
+        if criteria is None:
+            for acceptable_move in self.acceptable_moves:
+                if isinstance(move, acceptable_move):
+                    criteria = self.acceptable_moves[acceptable_move]()
+                    break
 
-        move.attach_simulation(self.context(self.atoms, self._rng))
+            if criteria is None:
+                raise ValueError(
+                    "No acceptance criteria found for the move. Please provide one."
+                )
 
-        self.moves[name] = move
-        self.move_intervals[name] = interval
-        self.move_probabilities[name] = probability
-        self.move_minimum_count[name] = minimum_count
+        forced_moves_count = sum(
+            [self.moves[name].minimum_count for name in self.moves]
+        )
 
-    def irun(self, *args, **kwargs):
-        """Run the Monte Carlo simulation for a given number of steps."""
+        if forced_moves_count + minimum_count > self.num_cycles:
+            raise ValueError("The number of forced moves exceeds the number of cycles.")
+
+        move.attach_simulation(self.context)
+
+        self.moves[name] = MoveStorage[MoveType, ContextType](
+            move=move,
+            interval=interval,
+            probability=probability,
+            minimum_count=minimum_count,
+            criteria=criteria,
+        )
+
+    def irun(self, *args, **kwargs) -> Generator[bool, None, None]:  # type: ignore
+        """
+        Run the Monte Carlo simulation for a given number of steps.
+
+        Returns
+        -------
+        Generator[bool, None, None]
+            Generator that yields True if the simulation is converged.
+        """
         if self.default_logger:
             self.default_logger.write_header()
 
-        return super().irun(*args, **kwargs)  # type: ignore
+        self.validate_simulation()
+
+        return super().irun(*args, **kwargs)
 
     def run(self, *args, **kwargs) -> bool:  # type: ignore
-        """Run the Monte Carlo simulation for a given number of steps."""
+        """
+        Run the Monte Carlo simulation for a given number of steps.
+
+        Returns
+        -------
+        bool
+            True if the simulation is converged.
+        """
         if self.default_logger:
             self.default_logger.write_header()
 
-        return super().run(*args, **kwargs)  # type: ignore
+        self.validate_simulation()
 
-    def todict(self) -> dict[str, Any]:
+        return super().run(*args, **kwargs)
+
+    def create_context(self, atoms: Atoms, rng: RNG) -> ContextType: ...
+
+    def validate_simulation(self) -> None:
+        """Validate the simulation object by checking if the atoms object has a calculator attached to it."""
+        if self.atoms.calc is None:
+            raise AttributeError("Atoms object must have a calculator attached to it.")
+        if not hasattr(self.atoms.calc, "results"):
+            raise AttributeError("Calculator object must have a results attribute.")
+
+    def to_dict(self) -> dict[str, Any]:
         """
         Return a dictionary representation of the Monte Carlo object.
 
         Returns
         -------
-        dict
+        dict[str, Any]
             A dictionary representation of the Monte Carlo object.
         """
         return {
@@ -174,52 +222,44 @@ class MonteCarlo(Dynamics):
             "nsteps": self.nsteps,
         }
 
-    def yield_moves(self):
+    def todict(self):
+        return self.to_dict()
+
+    def yield_moves(self) -> Generator[str, None, None]:
         """
-        Yield moves to be performed given the move parameters.
+        Yield moves to be performed given the move parameters. The moves are selected based on the probability of the move and the interval at which the move is attempted. Forced moves are introduced based on their minimum count. moves are yielded separately, re-constructing the move_probabilities array each time, allowing for a dynamic change in the probability of moves.
 
         Yields
         ------
-        bool
-            Whether the move was successful or not.
+        Generator[str, None, None]
+            The name of the move to be performed.
         """
-        available_moves = [
-            name for name in self.moves if self.nsteps % self.move_intervals[name] == 0
+        available_moves: list[str] = [
+            name for name in self.moves if self.nsteps % self.moves[name].interval == 0
         ]
 
         if not available_moves:
-            yield False
+            return
 
-        optional_moves, forced_moves = [], []
+        counts = [self.moves[name].minimum_count for name in available_moves]
+        forced_moves = np.repeat(available_moves, counts)
+        forced_moves_index = self._rng.choice(
+            np.arange(self.num_cycles), size=len(forced_moves), replace=False
+        )
+        forced_moves_mapping = dict(zip(forced_moves_index, forced_moves, strict=True))
 
-        for name in available_moves:
-            if self.move_minimum_count[name] > 0:
-                forced_moves.append(name)
+        for index in range(self.num_cycles):
+            if index in forced_moves_mapping:
+                yield forced_moves_mapping[index]
             else:
-                optional_moves.append(name)
+                move_probabilities = np.array(
+                    [self.moves[name].probability for name in available_moves]
+                )
+                move_probabilities /= np.sum(move_probabilities)
 
-        remaining_cycles = self.num_cycles - len(forced_moves)
+                selected_move = self._rng.choice(available_moves, p=move_probabilities)
 
-        if remaining_cycles > 0 and optional_moves:
-            move_probabilities = np.array(
-                [self.move_probabilities[name] for name in optional_moves]
-            )
-            move_probabilities /= np.sum(move_probabilities)
-
-            selected_move = self._rng.choice(
-                optional_moves,  # type: ignore
-                p=move_probabilities,
-                size=remaining_cycles,  # type: ignore
-            )
-
-            all_moves = np.concatenate((forced_moves, selected_move))  # type: ignore
-        else:
-            all_moves = forced_moves
-
-        self._rng.shuffle(all_moves)  # type: ignore
-
-        for move in all_moves:
-            yield self.moves[move]()
+                yield selected_move
 
     def converged(self) -> bool:  # type: ignore
         """
@@ -231,3 +271,29 @@ class MonteCarlo(Dynamics):
             True if the maximum number of steps is reached.
         """
         return self.nsteps >= self.max_steps
+
+
+@dataclass
+class MoveStorage[MoveType: BaseMove, ContextType: Context]:
+    """
+    Dataclass to store the moves and their acceptance criteria.
+
+    Attributes
+    ----------
+    move: MoveType
+        The move object.
+    interval: int
+        The interval at which the move is selected.
+    probability: float
+        The probability of the move being selected.
+    minimum_count: int
+        The minimum number of times the move must be performed in a cycle.
+    criteria: AcceptanceCriteria
+        The acceptance criteria for the move.
+    """
+
+    move: MoveType
+    interval: int
+    probability: float
+    minimum_count: int
+    criteria: AcceptanceCriteria[ContextType]

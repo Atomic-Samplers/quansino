@@ -1,33 +1,23 @@
-"""Module for defining operations that can be performed on atoms."""
-
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from abc import abstractmethod
+from typing import TYPE_CHECKING
 
 import numpy as np
 
+from quansino.mc.contexts import Context, DisplacementContext
+
 if TYPE_CHECKING:
-    from quansino.mc.contexts import Context, DisplacementContext, ExchangeContext
-    from quansino.typing import Center, Displacement
+    from quansino.type_hints import Displacement
 
 
-class Operation(ABC):
+class Operation[ContextType: Context]:
     """
-    Base class for all operations that can be performed on atoms.
-
-    Methods
-    -------
-    calculate(context: Any) -> Any
-        Calculate the operation to perform on the atoms.
-
-    Notes
-    -----
-    This class is a base class for all operations that can be performed on atoms. The `calculate` method should be implemented in the subclass, calculating the operation to perform on the atoms.
+    Abstract base class for operations.
     """
 
     @abstractmethod
-    def calculate(self, context: Any) -> Any: ...
+    def calculate(self, context: ContextType) -> Displacement: ...
 
     def __add__(self, other: Operation) -> CompositeOperation:
         """
@@ -49,11 +39,50 @@ class Operation(ABC):
         """
         if isinstance(other, CompositeOperation):
             return CompositeOperation([self, *other.operations])
+        else:
+            return CompositeOperation([self, other])
 
-        return CompositeOperation([self, other])
+    def __mul__(self, n: int) -> CompositeOperation:
+        """
+        Multiply the displacement move by an integer to create a composite move.
+
+        Parameters
+        ----------
+        n : int
+            The number of times to repeat the move.
+
+        Returns
+        -------
+        CompositeDisplacementMove
+            The composite move.
+        """
+        if n < 1 or not isinstance(n, int):
+            raise ValueError(
+                "The number of times the move is repeated must be a positive, non-zero integer."
+            )
+        return CompositeOperation([self] * n)
 
 
-class CompositeOperation(Operation):
+class DisplacementOperation[ContextType: DisplacementContext](Operation[ContextType]):
+    """
+    Base class for displacement operations.
+
+    Parameters
+    ----------
+    step_size : float, optional
+        The step size for the displacement operation (default is 1.0).
+
+    Attributes
+    ----------
+    step_size : float
+        The step size for the displacement operation.
+    """
+
+    def __init__(self, step_size: float = 1.0) -> None:
+        self.step_size = step_size
+
+
+class CompositeOperation[ContextType: Context](Operation[ContextType]):
     """
     Class to combine multiple operations into a single operation.
 
@@ -65,34 +94,25 @@ class CompositeOperation(Operation):
     Attributes
     ----------
     operations : list[Operation]
-        The operations to combine into a single operation
-
-    Methods
-    -------
-    calculate(context: Any) -> Any
-        Calculate the combined operation to perform on the atoms.
-
-    Notes
-    -----
-    This class is used to combine multiple operations into a single operation. The `calculate` method should be implemented in the subclass, calculating the combined operation to perform on the atoms.
+        The operations to combine into a single operation.
     """
 
-    def __init__(self, operations: list[Operation]) -> None:
+    def __init__(self, operations: list[Operation[ContextType]]) -> None:
         """Initialize the CompositeOperation object."""
         self.operations = operations
 
-    def calculate(self, context: Any) -> Any:
+    def calculate(self, context: ContextType) -> Displacement:
         """
         Calculate the combined operation to perform on the atoms.
 
         Parameters
         ----------
-        context : Any
+        context : ContextType
             The context to use when calculating the operation.
 
         Returns
         -------
-        Any
+        Displacement
             The combined operation to perform on the atoms.
         """
         return np.sum([op.calculate(context) for op in self.operations], axis=0)
@@ -120,14 +140,66 @@ class CompositeOperation(Operation):
         else:
             return CompositeOperation([*self.operations, other])
 
+    def __mul__(self, n: int) -> CompositeOperation:
+        """
+        Multiply the displacement move by an integer to create a composite move.
 
-class Translation(Operation):
-    """
-    Class to perform a translation operation on atoms by performing a random displacement in the cell.
-    """
+        Parameters
+        ----------
+        n : int
+            The number of times to repeat the move.
+
+        Returns
+        -------
+        CompositeDisplacementMove
+            The composite move.
+        """
+        if n < 1 or not isinstance(n, int):
+            raise ValueError(
+                "The number of times the move is repeated must be a positive, non-zero integer."
+            )
+        return type(self)(self.operations * n)
+
+    def __getitem__(self, index: int) -> Operation:
+        """
+        Get the move at the specified index.
+
+        Parameters
+        ----------
+        index : int
+            The index of the move.
+
+        Returns
+        -------
+        DisplacementMove
+            The move at the specified index.
+        """
+        return self.operations[index]
+
+    def __len__(self) -> int:
+        return len(self.operations)
+
+    def __iter__(self):
+        return iter(self.operations)
+
+    __rmul__ = __mul__
+
+    __imul__ = __mul__
+
+
+class Box(DisplacementOperation[DisplacementContext]):
+    """Class for a box-shaped displacement operation."""
 
     def calculate(self, context: DisplacementContext) -> Displacement:
-        """Calculate the translation operation to perform on the atoms.
+        return context.rng.uniform(-self.step_size, self.step_size, size=(1, 3))
+
+
+class Sphere(DisplacementOperation[DisplacementContext]):
+    """Class for a spherical operation that calculates the displacement of atoms within a sphere."""
+
+    def calculate(self, context: DisplacementContext) -> Displacement:
+        """
+        Calculate the spherical operation to perform on the atoms.
 
         Parameters
         ----------
@@ -137,42 +209,23 @@ class Translation(Operation):
         Returns
         -------
         Displacement
-            The translation operation to perform on the atoms.
+            The spherical operation to perform on the atoms.
         """
-        return context.rng.uniform(
-            0, 1, (1, 3)
-        ) @ context.atoms.cell.array - context.atoms.positions[
-            context.moving_indices
-        ].mean(axis=0)
+        phi = context.rng.uniform(0, 2 * np.pi, size=1)
+        cos_theta = context.rng.uniform(-1, 1, size=1)
+        sin_theta = np.sqrt(1 - cos_theta**2)
+
+        return self.step_size * np.column_stack(
+            (sin_theta * np.cos(phi), sin_theta * np.sin(phi), cos_theta)
+        )
 
 
-class Rotation(Operation):
-    """
-    Class to perform a rotation operation on atoms by performing a random Euler rotation around a specified center.
-
-    Parameters
-    ----------
-    center : str | Center
-        The center of the rotation. Can be a string or a Center object.
-
-    Attributes
-    ----------
-    center : str | Center
-        The center of the rotation
-
-    Methods
-    -------
-    calculate(context: DisplacementContext) -> Displacement
-        Calculate the rotation operation to perform on the atoms.
-    """
-
-    def __init__(self, center: str | Center = "COM") -> None:
-        """Initialize the Rotation object."""
-        self.center = center
+class Ball(DisplacementOperation[DisplacementContext]):
+    """Class for a spherical operation that calculates the displacement of atoms within a sphere."""
 
     def calculate(self, context: DisplacementContext) -> Displacement:
         """
-        Calculate the rotation operation to perform on the atoms.
+        Calculate the spherical operation to perform on the atoms.
 
         Parameters
         ----------
@@ -182,52 +235,7 @@ class Rotation(Operation):
         Returns
         -------
         Displacement
-            The rotation operation to perform on the atoms.
-        """
-        molecule = context.atoms[context.moving_indices]
-        phi, theta, psi = context.rng.uniform(0, 2 * np.pi, 3)
-        molecule.euler_rotate(phi, theta, psi, center=self.center)  # type: ignore
-
-        return molecule.positions - context.atoms.positions[context.moving_indices]  # type: ignore
-
-
-class Ball(Operation):
-    """
-    Class to perform a random displacement in a ball around the origin.
-
-    Parameters
-    ----------
-    step_size : float
-        The maximum distance to displace atoms.
-
-    Attributes
-    ----------
-    step_size : float
-        The maximum distance to displace atoms
-
-    Methods
-    -------
-    calculate(context: Context) -> Displacement
-        Calculate the displacement operation to perform on the atoms.
-    """
-
-    def __init__(self, step_size: float = 1.0) -> None:
-        """Initialize the Ball object."""
-        self.step_size = step_size
-
-    def calculate(self, context: Context) -> Displacement:
-        """
-        Calculate the displacement operation to perform on the atoms.
-
-        Parameters
-        ----------
-        context : Context
-            The context to use when calculating the operation.
-
-        Returns
-        -------
-        Displacement
-            The displacement operation to perform on the atoms.
+            The spherical operation to perform on the atoms.
         """
         r = context.rng.uniform(0, self.step_size, size=1)
         phi = context.rng.uniform(0, 2 * np.pi, size=1)
@@ -239,178 +247,45 @@ class Ball(Operation):
         )
 
 
-class Sphere(Operation):
-    """
-    Class to perform a random displacement in a sphere.
+class Translation(Operation[DisplacementContext]):
+    """Class for a translation operation."""
 
-    Parameters
-    ----------
-    step_size : float
-        The radius of the sphere.
+    def calculate(self, context: DisplacementContext) -> Displacement:
+        atoms = context.atoms
 
-    Attributes
-    ----------
-    step_size : float
-        The radius of the sphere
-
-    Methods
-    -------
-    calculate(context: Context) -> Displacement
-        Calculate the displacement operation to perform on the atoms.
-    """
-
-    def __init__(self, step_size: float = 1.0) -> None:
-        """Initialize the Sphere object."""
-        self.step_size = step_size
-
-    def calculate(self, context: Context) -> Displacement:
-        """
-        Calculate the displacement operation to perform on the atoms.
-
-        Parameters
-        ----------
-
-        context : Context
-            The context to use when calculating the operation.
-
-        Returns
-        -------
-        Displacement
-            The displacement operation to perform on the atoms.
-        """
-        r = self.step_size
-        phi = context.rng.uniform(0, 2 * np.pi, size=1)
-        cos_theta = context.rng.uniform(-1, 1, size=1)
-        sin_theta = np.sqrt(1 - cos_theta**2)
-
-        return np.column_stack(
-            (r * sin_theta * np.cos(phi), r * sin_theta * np.sin(phi), r * cos_theta)
-        )
+        return context.rng.uniform(0, 1, (1, 3)) @ atoms.cell.array - atoms.positions[
+            context.moving_indices
+        ].mean(axis=0)
 
 
-class Box(Operation):
-    """
-    Class to perform a random displacement in a box.
+class Rotation(Operation[DisplacementContext]):
+    """Class for a rotation operation."""
 
-    Parameters
-    ----------
-    step_size : float
-        The maximum distance to displace atoms.
+    def calculate(self, context: DisplacementContext) -> Displacement:
+        atoms = context.atoms
 
-    Attributes
-    ----------
-    step_size : float
-        The maximum distance to displace atoms
+        molecule = atoms[context.moving_indices]
+        phi, theta, psi = context.rng.uniform(0, 2 * np.pi, 3)
+        molecule.euler_rotate(phi, theta, psi, center="COM")  # type: ignore
 
-    Methods
-    -------
-    calculate(context: Context) -> Displacement
-        Calculate the displacement operation to perform on the atoms.
-    """
-
-    def __init__(self, step_size: float = 1.0) -> None:
-        """Initialize the Box object"""
-        self.step_size = step_size
-
-    def calculate(self, context: Context) -> Displacement:
-        """
-        Calculate the displacement operation to perform on the atoms.
-
-        Parameters
-        ----------
-        context : Context
-            The context to use when calculating the operation.
-
-        Returns
-        -------
-        Displacement
-            The displacement operation to perform on the atoms.
-        """
-        return context.rng.uniform(-self.step_size, self.step_size, size=(1, 3))
+        return molecule.positions - context.atoms.positions[context.moving_indices]  # type: ignore
 
 
 class TranslationRotation(Operation):
     """
     Class to perform a translation and rotation operation on atoms.
 
-    Parameters
-    ----------
-    center : str | Center
-        The center of the rotation. Can be a string or a Center object.
-
     Attributes
     ----------
     translation : Translation
-        The translation operation
+        The translation operation.
     rotation : Rotation
-        The rotation operation
-
-    Methods
-    -------
-    calculate(context: DisplacementContext) -> Displacement
-        Calculate the translation and rotation operation to perform on the atoms.
+        The rotation operation.
     """
 
-    def __init__(self, center: str | Center = "COM") -> None:
-        """Initialize the TranslationRotation object."""
+    def __init__(self):
         self.translation = Translation()
-        self.rotation = Rotation(center)
+        self.rotation = Rotation()
 
     def calculate(self, context: DisplacementContext) -> Displacement:
-        """
-        Calculate the translation and rotation operation to perform on the atoms.
-
-        Parameters
-        ----------
-        context : DisplacementContext
-            The context to use when calculating the operation.
-
-        Returns
-        -------
-        Displacement
-            The translation and rotation operation to perform on the atoms.
-        """
         return self.translation.calculate(context) + self.rotation.calculate(context)
-
-
-class Exchange(Operation):
-    """
-    Class to perform an exchange operation on atoms.
-
-    Methods
-    -------
-    addition(context: ExchangeContext) -> None
-        Add atoms to the atoms object.
-    deletion(context: ExchangeContext) -> None
-        Delete atoms from the atoms object.
-    """
-
-    def addition(self, context: ExchangeContext) -> None:
-        """
-        Add atoms to the atoms object.
-
-        Parameters
-        ----------
-        context : ExchangeContext
-            The context to use when adding atoms.
-        """
-        context.atoms.extend(context.addition_candidates)
-
-    def deletion(self, context: ExchangeContext) -> None:
-        """
-        Delete atoms from the atoms object.
-
-        Parameters
-        ----------
-        context : ExchangeContext
-            The context to use when deleting atoms.
-        """
-        del context.atoms[context.deletion_candidates]
-
-
-class ExchangeTranslation(Translation, Exchange):
-    """Class to perform an exchange translation operation on atoms."""
-
-
-class ExchangeTranslationRotation(TranslationRotation, Exchange):
-    """Class to perform an exchange translation and rotation operation on atoms."""

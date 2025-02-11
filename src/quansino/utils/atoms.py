@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from ase.atoms import Atoms
     from ase.constraints import FixConstraint
 
-    from quansino.typing import IntegerArray
+    from quansino.type_hints import IntegerArray
 
 
 def has_constraint(atoms: Atoms, constraint_type: type[FixConstraint] | str) -> bool:
