@@ -2,105 +2,98 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
+from ase.atoms import Atoms
 from ase.build import molecule
 
-from quansino.mc.contexts import Context, ExchangeContext
+from quansino.mc.contexts import ExchangeContext
 from quansino.moves.displacements import DisplacementMove
-from quansino.moves.operations import (
-    Exchange,
-    ExchangeTranslation,
-    ExchangeTranslationRotation,
-    Operation,
-)
+from quansino.moves.operations import Translation, TranslationRotation
 
 if TYPE_CHECKING:
-    from ase.atoms import Atoms
+    from quansino.moves.operations import CompositeOperation, Operation
+    from quansino.type_hints import IntegerArray
 
-    from quansino.typing import IntegerArray
 
-
-class ExchangeMove(DisplacementMove):
+class ExchangeMove[
+    OperationType: Operation | CompositeOperation, ContextType: ExchangeContext
+](DisplacementMove[OperationType, ContextType]):
     """
-    Class for an atomic exchange move that exchanges atom(s). The class will use an [Exchange][quansino.moves.operations.Exchange] operation to place the Atoms object `exchange_atoms` in the unit cell and update the indices of the `candidate_indices` of [`DisplacementMoves`][quansino.moves.displacements.DisplacementMove] objects listed in the `moves` dictionary of [`ExchangeContext`][quansino.mc.contexts.ExchangeContext]
+    Class for atomic/molecular exchange moves that exchanges atom(s). The class will either add `exchange_atoms` in the unit cell or delete a (group) of atom(s) present in `labels`. In the former, this is done using the `attempt_move` method in the parent [`DisplacementMove`][quansino.moves.displacements.DisplacementMove] class using the provided [`operation`][quansino.moves.operations.Operation] (Translation by default i.e. newly added atoms are attempted to be placed anywhere in the cell). Deletion will be attempted on any non-negative integers in `labels` from the parent class [`DisplacementMove`][quansino.moves.displacements.DisplacementMove]. When successful, the [`save_state()`][quansino.mc.contexts.ExchangeContext.save_state] method must be called to update the `labels` of any other [`DisplacementMoves`][quansino.moves.displacements.DisplacementMove] objects linked to the simulation to keep them in sync with the newly added or removed atoms.
 
     Parameters
     ----------
     exchange_atoms : Atoms | str
         The atoms to exchange.
-    candidate_indices : IntegerArray, optional
-        The indices of the already present atoms that can be exchanged, by default None.
+    exchangeable_labels : IntegerArray
+        The labels of the atoms that can be exchanged (already present).
+    operation : Operation, optional
+        The operation to perform in the move, by default None.
     bias_towards_insert : float, optional
         The probability of inserting atoms instead of deleting, by default 0.5.
-    move_type : Operation, optional
-        The operation to perform in the move, by default None.
-    move_updates_to_skip : str | list[str], optional
-        The move updates to skip, by default None.
+    apply_constraints : bool, optional
+        Whether to apply constraints during the move, by default True.
 
     Attributes
     ----------
+    AcceptableContext : ExchangeContext
+        The required context for the move.
     exchange_atoms : Atoms
         The atoms to exchange.
-    move_operator : Exchange
-        The exchange operation, must be an instance of `quansino.moves.operations.Exchange`.
     bias_towards_insert : float
         The probability of inserting atoms instead of deleting, can be used to bias the move towards insertion or deletion.
-    move_updates_to_skip : list[str]
-        By default, `ExchangeMove` will update the indices of all displacement moves belongig to the current context. This list can be used to skip updating the indices of specific moves.
-    context : ExchangeContext
-        The context for the move.
-    required_context : ExchangeContext
-        The required context for the move.
+    to_add_atoms : Atoms | None
+        The atoms to add during the next move, in the current implementation, this attribute is reset after each move in [`register_success`][quansino.moves.exchange.ExchangeMove.register_success] and [`register_failure`][quansino.moves.exchange.ExchangeMove.register_failure].
+    to_delete_indices : int | None
+        The indices of the atoms to delete during the next move, in the current implementation, this attribute is reset after each move in [`register_success`][quansino.moves.exchange.ExchangeMove.register_success] and [`register_failure`][quansino.moves.exchange.ExchangeMove.register_failure].
 
-    Notes
-    -----
-    The `ExchangeMove` class is a subclass of `DisplacementMove` and is used to perform atomic exchanges in a Monte Carlo simulation. The move can be biased towards insertion or deletion, and can be used to exchange multiple atoms at once. The move can be used with any operation that is a subclass of `quansino.moves.operations.Exchange`.
+    Important
+    ---------
+    1. At object creation, `exchangeable_labels` must have the same length as the number of atoms in the simulation. Any labels that are not negative integers are considered exchangeable (deletable). Atoms that share the same label are considered to be part of the same group (molecule) and will be deleted together. Simulations such as [`GrandCanonical`][quansino.mc.gcmc.GrandCanonical] will automatically update the labels of the created move and other moves to keep them in sync with the simulation.
     """
 
-    required_context = ExchangeContext
+    AcceptableContext = ExchangeContext
 
     def __init__(
         self,
         exchange_atoms: Atoms | str,
-        candidate_indices: IntegerArray | None = None,
+        exchangeable_labels: IntegerArray,
+        operation: OperationType | None = None,
         bias_towards_insert: float = 0.5,
-        move_type: Operation | None = None,
-        move_updates_to_skip: str | list[str] | None = None,
+        apply_constraints: bool = True,
     ) -> None:
         """Initialize the ExchangeMove object."""
         if isinstance(exchange_atoms, str):
             exchange_atoms = molecule(exchange_atoms)
 
-        self.exchange_atoms = exchange_atoms
-
-        default_move = (
-            ExchangeTranslationRotation()
-            if len(exchange_atoms) > 1
-            else ExchangeTranslation()
-        )
-
-        move_type = move_type or default_move
-
-        super().__init__(
-            displacement_type=move_type, candidate_indices=candidate_indices
-        )
-
-        self.move_operator = cast(Exchange, self.move_operator)
+        self.exchange_atoms = cast(Atoms, exchange_atoms)
 
         self.bias_towards_insert = bias_towards_insert
 
-        self.set_move_updates_to_skip(move_updates_to_skip or [])
+        self.to_add_atoms: Atoms | None = None
+        self.to_delete_indices: int | None = None
+
+        if operation is None:
+            if len(exchange_atoms) > 1:
+                default_operation = cast(OperationType, TranslationRotation())
+            else:
+                default_operation = cast(OperationType, Translation())
+
+            operation = default_operation
+
+        super().__init__(exchangeable_labels, operation, apply_constraints)
 
     def __call__(self) -> bool:
         """
         Perform the exchange move. The following steps are performed:
 
-        1. Reset the context, and decide whether to insert or delete atoms.
-        2. Perform the move using the move operator attached to the move.
-        3. In case of an addition, attempt to place the atoms at the new positions using the parent class `DisplacementMove.attempt_move`. If the move is not successful, register the exchange failure and return False.
-        4. In case of a deletion, remove the atoms from the atoms object.
+        1. Reset the context, this is done to clear any previous move attributes such as `moving_indices`, `added_indices`, `deleted_indices`, `particle_delta`, `added_atoms`, and `deleted_atoms`, which are needed to keep track of the move and calculate the acceptance probability.
+        2. Decide whether to insert or delete atoms, this can be pre-selected by setting the `to_add_atoms` or `to_delete_indices` attributes before calling the move. If not, the decision is made randomly based on the `bias_towards_insert` attribute.
+        3. If adding atoms, add the atoms to the atoms object and attempt to place them at the new positions using the parent class [`DisplacementMove.attempt_move`][quansino.moves.displacements.DisplacementMove.attempt_move]. If the move is not successful, remove the atoms from the atoms object and register the exchange failure. If deleting atoms, remove the atoms from the atoms object, failure is only possible if all labels are negative integers (no atoms to delete).
+        3. In case of an addition, attempt to place the atoms at the new positions using the parent class [`DisplacementMove.attempt_move`][quansino.moves.displacements.DisplacementMove.attempt_move]. If the move is not successful, register the exchange failure and return False.
+        4. During these steps, all attribute in the context object are updated to keep track of the move and can be used later for multiple purposes such as calculating the acceptance probability.
 
         Returns
         -------
@@ -109,76 +102,86 @@ class ExchangeMove(DisplacementMove):
         """
         self.context.reset()
 
-        if self.context.rng.random() < self.bias_towards_insert:
-            if self.context.addition_candidates is None:
-                self.context.addition_candidates = self.exchange_atoms
+        if self.to_add_atoms is None and self.to_delete_indices is None:
+            is_addition = self.context.rng.random() < self.bias_towards_insert
+        else:
+            is_addition = bool(self.to_add_atoms)
 
-            self.move_operator.addition(self.context)
-            moving_indices = np.arange(len(self.context.atoms))[
-                -len(self.context.addition_candidates) :
+        if is_addition:
+            self.to_add_atoms = self.to_add_atoms or self.exchange_atoms
+
+            self.addition()
+            self.context.moving_indices = np.arange(len(self.context.atoms))[
+                -len(self.to_add_atoms) :
             ]
 
-            if not super().attempt_move(moving_indices):
-                self.context.register_exchange_failure()
-                return False
+            if not super().attempt_move():
+                del self.context.atoms[self.context.moving_indices]
+                return self.register_failure()
 
-            self.context.last_added_indices = moving_indices
+            self.context.added_indices = self.context.moving_indices
+            self.context.particle_delta += len(self.to_add_atoms)
+            self.context.added_atoms = self.to_add_atoms
         else:
-            if self.context.deletion_candidates is None:
-                if not self._number_of_available_candidates:
-                    return False
+            if self.to_delete_indices is None:
+                if not len(self.unique_labels):
+                    return self.register_failure()
 
-                self.context.deletion_candidates = np.asarray(
-                    self.context.rng.choice(self._unique_candidates)
+                self.to_delete_indices = int(
+                    self.context.rng.choice(self.unique_labels)
                 )
 
-            mask = np.isin(self.candidate_indices, self.context.deletion_candidates)
-            self.context.last_deleted_indices = np.where(mask)[0]
-            self.context.last_deleted_atoms = self.context.atoms[mask]  # type: ignore
+            (self.context.deleted_indices,) = np.where(
+                self.labels == self.to_delete_indices
+            )
 
-            del self.context.atoms[mask]
+            self.context.deleted_atoms = self.context.atoms[
+                self.context.deleted_indices
+            ]  # type: ignore
+            self.context.particle_delta -= len(self.context.deleted_atoms)
+            self.deletion()
+
+        if bool(self.context.added_atoms) or bool(self.context.deleted_atoms):
+            return self.register_success()
+        else:
+            return self.register_failure()
+
+    def addition(self) -> None:
+        """
+        Add atoms to the atoms object.
+        """
+        self.context.atoms.extend(self.to_add_atoms)
+
+    def deletion(self) -> None:
+        """
+        Delete atoms from the atoms object.
+        """
+        del self.context.atoms[self.context.deleted_indices]
+
+    def register_success(self) -> Literal[True]:
+        """
+        Register a successful exchange move, in which case all information is retained except the prior move attributes.
+
+        Returns
+        -------
+        Literal[True]
+            Always returns True.
+        """
+        self.to_add_atoms = None
+        self.to_delete_indices = None
 
         return True
 
-    def set_move_updates_to_skip(self, move_updates_to_skip: str | list[str]) -> None:
+    def register_failure(self) -> Literal[False]:
         """
-        Set the move updates to skip.
+        Register a failed exchange move, in which case all information is retained except the prior move attributes.
 
-        Parameters
-        ----------
-        move_updates_to_skip : str | list[str]
-            The move updates to skip.
+        Returns
+        -------
+        Literal[False]
+            Always returns False.
         """
-        if isinstance(move_updates_to_skip, str):
-            self.move_updates_to_skip = [move_updates_to_skip]
-        else:
-            self.move_updates_to_skip = move_updates_to_skip
+        self.to_add_atoms = None
+        self.to_delete_indices = None
 
-    def attach_simulation(
-        self, context: Context, update_candidates: bool = True
-    ) -> None:
-        """
-        Attach the simulation to the move.
-
-        Parameters
-        ----------
-        context : Context
-            The context to attach to the move. Must be an instance of [`ExchangeContext`][quansino.mc.contexts.ExchangeContext].
-        update_candidates : bool, optional
-            Whether to update the candidates, by default True.
-
-        Raises
-        ------
-        ValueError
-            If the context is not an instance of [`ExchangeContext`][quansino.mc.contexts.ExchangeContext].
-        """
-        super().attach_simulation(context, update_candidates)
-        self.context = cast(ExchangeContext, self.context)
-
-    def update_moves(self) -> None:
-        """Update the indices of the displacement moves in the context."""
-        for name, move in self.context.moves.items():
-            if name not in self.move_updates_to_skip:
-                move.update_indices(
-                    self.context.last_added_indices, self.context.last_deleted_indices
-                )
+        return False

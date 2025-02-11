@@ -4,8 +4,10 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from ase.atoms import Atoms
 from ase.build import bulk
 from ase.calculators.eam import EAM
+from ase.calculators.emt import EMT
 
 
 @pytest.fixture(name="eam_calc")
@@ -37,6 +39,20 @@ def bulk_large_fixture(eam_calc):
     atoms = bulk("Cu", cubic=True) * (6, 6, 6)
     atoms.calc = eam_calc
     return atoms
+
+
+@pytest.fixture(name="single_atom")
+def single_atom_fixture():
+    atom = Atoms("H", positions=[[0, 0, 0]])
+    atom.calc = EMT()
+    return atom
+
+
+@pytest.fixture(name="empty_atoms")
+def empty_atoms_fixture():
+    empty_atoms = Atoms()
+    empty_atoms.calc = EMT()
+    return empty_atoms
 
 
 @pytest.fixture(name="rng")
