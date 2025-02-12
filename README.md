@@ -32,6 +32,10 @@ The full documentation can be found [here](https://atomic-samplers.github.io/qua
 - 📖 [Overview](https://atomic-samplers.github.io/quansino/documentation/overview.html)
 - 💡 [Examples](https://atomic-samplers.github.io/quansino/documentation/examples.html)
 
+## Citation 🎯
+
+If you use `quansino` in your research, please cite the following repository: https://doi.org/10.5281/zenodo.14854001
+
 ## License 🃏
 
 This project is licensed under the terms of the BSD 3-Clause license.
