@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.0.3]
+
+- Bumped numpy version to 2.1.3 in tests
+- Fixed issue with .codecov.yml for `quansino.type_hints` module
+- Releasing for Zenodo DOI
+
 ## [0.0.2]
 
 ## Added
