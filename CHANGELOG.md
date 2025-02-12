@@ -2,7 +2,7 @@
 
 ## [0.0.3]
 
-- Bumped numpy version to 2.1.3 in tests
+- Bumped NumPy version to 2.1.3 in tests
 - Fixed issue with .codecov.yml for `quansino.type_hints` module
 - Releasing for Zenodo DOI
 
