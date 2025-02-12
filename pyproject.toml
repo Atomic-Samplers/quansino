@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "quansino"
 description="`quansino` is a modular package based on the Atomic Simulation Environment (ASE) for quickly building custom Monte Carlo algorithms"
-version = "0.0.1"
+version = "0.0.2"
 readme = "README.md"
 license = { text = "BSD-3" }
 authors = [{ name = "Tom Demeyere", email = "tom.dmre@gmail.com" }]

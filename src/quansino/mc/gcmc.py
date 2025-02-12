@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 import math
-from dataclasses import astuple
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, ClassVar
 
 import numpy as np
 from ase.units import _e, _hplanck, _Nav, kB
@@ -131,7 +130,7 @@ class GrandCanonical[MoveType: DisplacementMove, ContextType: ExchangeContext](
         num_cycles: int,
         default_displacement_move: DisplacementMove | None = None,
         default_exchange_move: (
-            MoveStorage[MoveType, ContextType] | MoveType | None
+            MoveStorage[MoveType, ExchangeContext] | MoveType | None
         ) = None,
         **mc_kwargs,
     ) -> None:
@@ -171,18 +170,13 @@ class GrandCanonical[MoveType: DisplacementMove, ContextType: ExchangeContext](
         if isinstance(default_exchange_move, DisplacementMove):
             self.add_move(default_exchange_move, name="default_exchange")
         elif isinstance(default_exchange_move, MoveStorage):
-            typed_tuple = cast(
-                tuple[MoveType, float, int, int, AcceptanceCriteria],
-                astuple(default_exchange_move),
-            )
-            default_move, probability, interval, minimum_count, criteria = typed_tuple
             self.add_move(
-                default_move,
-                criteria,
+                default_exchange_move.move,
+                default_exchange_move.criteria,
                 "default_exchange",
-                interval,
-                probability,
-                minimum_count,
+                default_exchange_move.interval,
+                default_exchange_move.probability,
+                default_exchange_move.minimum_count,
             )
 
     def create_context(self, atoms: Atoms, rng: RNG) -> ExchangeContext:

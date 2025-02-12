@@ -4,6 +4,7 @@ import math
 from copy import copy
 
 import numpy as np
+import pytest
 from ase import Atoms
 from ase.build import molecule
 from ase.calculators.emt import EMT
@@ -11,6 +12,7 @@ from ase.units import _e, _hplanck, _Nav, kB
 from numpy.testing import assert_array_equal
 
 from quansino.mc.contexts import ExchangeContext
+from quansino.mc.core import MoveStorage
 from quansino.mc.gcmc import GrandCanonical, GrandCanonicalCriteria
 from quansino.moves.displacements import DisplacementMove
 from quansino.moves.exchange import ExchangeMove
@@ -130,6 +132,29 @@ def test_grand_canonical_defaults(bulk_medium):
 
     energy_difference = energy_full - energy_minus_one
 
+    move_storage = MoveStorage(
+        DisplacementMove(np.arange(len(bulk_medium))),
+        10,
+        0.5,
+        1,
+        GrandCanonicalCriteria(),
+    )
+
+    gcmc = GrandCanonical[DisplacementMove, ExchangeContext](
+        bulk_medium,
+        temperature=1000,
+        chemical_potential=energy_difference,
+        num_cycles=1,
+        default_exchange_move=move_storage,
+        number_of_particles=len(bulk_medium),
+        seed=42,
+    )
+
+    assert gcmc.moves["default_exchange"].move == move_storage.move
+    assert gcmc.moves["default_exchange"].interval == 10
+    assert gcmc.moves["default_exchange"].probability == 0.5
+    assert gcmc.moves["default_exchange"].minimum_count == 1
+
     displacement_move = DisplacementMove(np.arange(len(bulk_medium)))
 
     labels = np.arange(len(bulk_medium))
@@ -231,6 +256,9 @@ def test_grand_canonical_criteria(rng):
     context.particle_delta = 1
 
     context.temperature = 298
+
+    with pytest.raises(ValueError):
+        GrandCanonicalCriteria().evaluate(context, -np.inf)
 
     context.added_atoms = Atoms("Cu")
 

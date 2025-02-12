@@ -1,5 +1,5 @@
 ignore:
-  - "src/quansino/typing.py"
+  - "src/quansino/type_hints.py"
 comment: false
 coverage:
   status:
