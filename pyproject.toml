@@ -23,7 +23,7 @@ classifiers = [
     "Operating System :: MacOS",
 ]
 requires-python = ">=3.12"
-dependencies = ["numpy>=1.19.5,<=2.1.3", "ase>=3.24.0", "networkx>=3.4.2"]
+dependencies = ["numpy>=1.19.5,<=2.2.3", "ase>=3.24.0", "networkx>=3.4.2"]
 
 [project.optional-dependencies]
 dev = ["pytest>=7.4.0", "pytest-cov>=3.0.0", "ruff>=0.0.285"]
