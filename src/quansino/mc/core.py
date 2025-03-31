@@ -22,7 +22,6 @@ if TYPE_CHECKING:
     from typing import Any
 
     from ase.atoms import Atoms
-    from ase.outputs import Properties
 
 
 class AcceptanceCriteria[ContextType: Context](ABC):
@@ -197,7 +196,7 @@ class MonteCarlo[MoveType: BaseMove, ContextType: Context](Dynamics):
             is_converged = self.converged()
             yield is_converged
 
-    def step(self, properties: Properties | None = None) -> Any: ...  # type: ignore
+    def step(self) -> Any: ...  # type: ignore
 
     def run(self, steps=100_000_000) -> bool:  # type: ignore
         """
