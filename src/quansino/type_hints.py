@@ -50,6 +50,9 @@ Forces = ndarray[tuple[int, 3], dtype[floating]]
 Positions = ndarray[tuple[int, 3], dtype[floating]]
 """Type hint for an array of 3D positions."""
 
+Momenta = ndarray[tuple[int, 3], dtype[floating]]
+"""Type hint for an array of 3D momenta."""
+
 Velocities = ndarray[tuple[int, 3], dtype[floating]]
 """Type hint for an array of 3D velocities."""
 
