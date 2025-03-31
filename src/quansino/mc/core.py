@@ -164,7 +164,7 @@ class MonteCarlo[MoveType: BaseMove, ContextType: Context](Dynamics):
             criteria=criteria,
         )
 
-    def irun(self, *args, **kwargs) -> Generator[bool, None, None]:  # type: ignore
+    def irun(self, steps=100_000_000) -> Generator[bool, None, None]:  # type: ignore
         """
         Run the Monte Carlo simulation for a given number of steps.
 
@@ -178,9 +178,27 @@ class MonteCarlo[MoveType: BaseMove, ContextType: Context](Dynamics):
 
         self.validate_simulation()
 
-        return super().irun(*args, **kwargs)
+        self.max_steps = self.nsteps + steps
 
-    def run(self, *args, **kwargs) -> bool:  # type: ignore
+        self.atoms.get_potential_energy()
+        self.call_observers()
+
+        is_converged = self.converged()
+        yield is_converged
+
+        while not is_converged and self.nsteps < self.max_steps:
+            self.step()
+            self.nsteps += 1
+
+            self.atoms.get_potential_energy()
+            self.call_observers()
+
+            is_converged = self.converged()
+            yield is_converged
+
+    def step(self) -> Any: ...  # type: ignore
+
+    def run(self, steps=100_000_000) -> bool:  # type: ignore
         """
         Run the Monte Carlo simulation for a given number of steps.
 
@@ -189,12 +207,7 @@ class MonteCarlo[MoveType: BaseMove, ContextType: Context](Dynamics):
         bool
             True if the simulation is converged.
         """
-        if self.default_logger:
-            self.default_logger.write_header()
-
-        self.validate_simulation()
-
-        return super().run(*args, **kwargs)
+        return list(self.irun(steps=steps))[-1]
 
     def create_context(self, atoms: Atoms, rng: RNG) -> ContextType: ...
 

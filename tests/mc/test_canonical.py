@@ -99,7 +99,7 @@ def test_canonical(bulk_small, tmp_path):
 
     acceptance_from_log = np.loadtxt(tmp_path / "mc.log", skiprows=13, usecols=-1)
 
-    assert_array_equal(acceptances[1:], acceptance_from_log)
+    assert_array_equal(acceptances, acceptance_from_log)
     assert_allclose(np.sum(acceptances), 500, atol=100)
 
     move_storage = MoveStorage[DisplacementMove, DisplacementContext](
