@@ -7,17 +7,18 @@ from typing import TYPE_CHECKING, Literal, cast
 import numpy as np
 
 from quansino.mc.contexts import DisplacementContext
-from quansino.moves.composite import CompositeDisplacementMove
 from quansino.moves.core import BaseMove
-from quansino.moves.operations import Box, CompositeOperation, Operation
+from quansino.operations.core import Operation
+from quansino.operations.displacement import Box
 
 if TYPE_CHECKING:
+    from quansino.operations.displacement import DisplacementOperation
     from quansino.type_hints import IntegerArray
 
 
-class DisplacementMove[
-    OperationType: Operation | CompositeOperation, ContextType: DisplacementContext
-](BaseMove[OperationType, ContextType]):
+class DisplacementMove[OperationType: Operation, ContextType: DisplacementContext](
+    BaseMove[OperationType, ContextType]
+):
     """
     Class for displacement moves that displaces one atom or a group of atoms. The class will use an [`Operation`][quansino.moves.operations.Operation]. The class uses the `labels` attribute to determine which atoms can be displaced, if none, the move fails. If multiple atoms share the same label, they are considered to be part of the same group (molecule) and will be displaced together in a consistent manner.
 
@@ -53,8 +54,7 @@ class DisplacementMove[
     2. Conditions for a successful move can be tightened either by subclassing the move and overriding the `check_move` method, or by using the [`MethodType`][types.MethodType] function to replace the method in the instance.
     """
 
-    CompositeMove = CompositeDisplacementMove
-    AcceptableContext = DisplacementContext
+    is_updatable: Literal[True] = True
 
     def __init__(
         self,
@@ -184,9 +184,43 @@ class DisplacementMove[
 
         return False
 
+    def update(
+        self, indices_to_add: IntegerArray, indices_to_remove: IntegerArray
+    ) -> None:
+        """
+        Update the move by resetting the labels and updating the operation.
+
+        Parameters
+        ----------
+        indices_to_add : IntegerArray
+            The indices of the atoms to add.
+        indices_to_remove : IntegerArray
+            The indices of the atoms to remove.
+
+        Raises
+        ------
+        ValueError
+            If the length of the labels is not equal to the number of atoms.
+        """
+        if len(indices_to_add):
+            label: int = self.default_label or (
+                max(self.unique_labels) + 1 if len(self.unique_labels) else 0
+            )
+            self.set_labels(
+                np.hstack((self.labels, np.full(len(indices_to_add), label)))
+            )
+
+        if len(indices_to_remove):
+            self.set_labels(np.delete(self.labels, indices_to_remove))
+
+        if len(self.labels) != len(self.context.atoms):
+            raise ValueError(
+                "Updating the labels went wrong, the length of the labels is not equal to the number of atoms."
+            )
+
     def __add__(
-        self: DisplacementMove, other: DisplacementMove | CompositeMove
-    ) -> CompositeMove:
+        self: DisplacementMove, other: DisplacementMove | CompositeDisplacementMove
+    ) -> CompositeDisplacementMove:
         """
         Add two displacement moves together to create a composite move.
 
@@ -200,12 +234,12 @@ class DisplacementMove[
         CompositeMove
             The composite move.
         """
-        if isinstance(other, self.CompositeMove):
-            return self.CompositeMove([self, *other.moves])
+        if isinstance(other, CompositeDisplacementMove):
+            return CompositeDisplacementMove([self, *other.moves])
         else:
-            return self.CompositeMove([self, other])
+            return CompositeDisplacementMove([self, other])
 
-    def __mul__(self: DisplacementMove, n: int) -> CompositeMove:
+    def __mul__(self: DisplacementMove, n: int) -> CompositeDisplacementMove:
         """
         Multiply the displacement move by an integer to create a composite move.
 
@@ -223,7 +257,7 @@ class DisplacementMove[
             raise ValueError(
                 "The number of times the move is repeated must be a positive, non-zero integer."
             )
-        return self.CompositeMove([self] * n)
+        return CompositeDisplacementMove([self] * n)
 
     __rmul__ = __mul__
 
@@ -240,3 +274,158 @@ class DisplacementMove[
         new_move.__dict__.update(self.__dict__)
 
         return new_move
+
+
+class CompositeDisplacementMove[
+    OperationType: Operation, ContextType: DisplacementContext
+](BaseMove[OperationType, ContextType]):
+    """
+    Class to perform a composite displacement operation on atoms.
+
+    Parameters
+    ----------
+    moves : list[DisplacementMove]
+        The moves to perform in the composite move.
+
+    Attributes
+    ----------
+    moves : list[DisplacementMove]
+        The moves to perform in the composite move
+
+    Methods
+    -------
+    calculate(context: DisplacementContext) -> Displacement
+        Calculate the composite displacement operation to perform on the atoms.
+    """
+
+    def __init__(
+        self, moves: list[DisplacementMove[DisplacementOperation, ContextType]]
+    ) -> None:
+        self.moves = moves
+
+        self.displaced_labels: list[int | None] = []
+        self.number_of_moved_particles: int = 0
+
+        self.with_replacement = False
+
+    def __call__(self) -> bool:
+        """
+        Perform the displacement move. The following steps are performed:
+
+        1. If no candidates are available, return False and does not register a move.
+        2. Check if there are enough candidates to displace. If yes, select `displacements_per_move` number of candidates from the available candidates, if not, select the maximum number of candidates available.
+        3. If `to_displace_labels` is None, select `displacements_per_move` candidates from the available candidates.
+        4. Attempt to move each candidate using `attempt_move`. If any of the moves is successful, register a success and return True. Otherwise, register a failure and return False.
+
+        Returns
+        -------
+        bool
+            Whether the move was valid.
+        """
+        self.reset()
+
+        for move in self.moves:
+            if move.to_displace_labels is None and self.with_replacement is False:
+                filtered_displaced_labels = [
+                    atom for atom in self.displaced_labels if atom is not None
+                ]
+                available_candidates = np.setdiff1d(
+                    move.unique_labels, filtered_displaced_labels, assume_unique=True
+                )
+                if len(available_candidates) == 0:
+                    self.register_failure()
+                    continue
+
+                move.to_displace_labels = move.context.rng.choice(available_candidates)
+
+            if move():
+                self.register_success(move)
+            else:
+                self.register_failure()
+
+        return self.number_of_moved_particles > 0
+
+    def register_success(self, move: DisplacementMove) -> None:
+        """Register a successful move, saving the current state."""
+        self.displaced_labels.append(move.displaced_labels)
+
+        self.number_of_moved_particles += 1
+
+    def register_failure(self) -> None:
+        """Register a failed move, reverting any changes made."""
+        self.displaced_labels.append(None)
+
+    def reset(self) -> None:
+        self.displaced_labels = []
+        self.number_of_moved_particles = 0
+
+    def __add__(
+        self, other: DisplacementMove | CompositeDisplacementMove
+    ) -> CompositeDisplacementMove:
+        """
+        Add two displacement moves together to create a composite move.
+
+        Parameters
+        ----------
+        other : DisplacementMove
+            The other displacement move to add.
+
+        Returns
+        -------
+        CompositeDisplacementMove
+            The composite move.
+        """
+        if isinstance(other, CompositeDisplacementMove):
+            return type(self)(self.moves + other.moves)
+        else:
+            return type(self)([*self.moves, other])
+
+    def attach_simulation(self, context: ContextType) -> None:
+        for move in self.moves:
+            move.attach_simulation(context)
+
+    def __mul__(self, n: int) -> CompositeDisplacementMove:
+        """
+        Multiply the displacement move by an integer to create a composite move.
+
+        Parameters
+        ----------
+        n : int
+            The number of times to repeat the move.
+
+        Returns
+        -------
+        CompositeDisplacementMove
+            The composite move.
+        """
+        if n < 1 or not isinstance(n, int):
+            raise ValueError(
+                "The number of times the move is repeated must be a positive, non-zero integer."
+            )
+        return type(self)(self.moves * n)
+
+    def __getitem__(self, index: int) -> DisplacementMove:
+        """
+        Get the move at the specified index.
+
+        Parameters
+        ----------
+        index : int
+            The index of the move.
+
+        Returns
+        -------
+        DisplacementMove
+            The move at the specified index.
+        """
+        return self.moves[index]
+
+    def __len__(self) -> int:
+        return len(self.moves)
+
+    def __iter__(self):
+        return iter(self.moves)
+
+    __rmul__ = __mul__
+
+    __imul__ = __mul__

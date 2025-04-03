@@ -74,7 +74,7 @@ class ForceBias(MonteCarlo):
             self.default_logger.add_field(
                 "Gamma/GammaMax",
                 lambda: np.max(np.abs(self.gamma / self.gamma_max_value)),
-                str_format=">16.2f",
+                str_format="{:>16.2f}",
             )
 
         self.current_size = self.size

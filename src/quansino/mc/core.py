@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
 
 import numpy as np
 from ase.optimize.optimize import Dynamics
@@ -15,7 +14,7 @@ from numpy.random import Generator as RNG
 
 from quansino.io import Logger
 from quansino.mc.contexts import Context
-from quansino.moves.core import BaseMove
+from quansino.moves.protocol import BaseProtocol
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -23,19 +22,14 @@ if TYPE_CHECKING:
 
     from ase.atoms import Atoms
 
-
-class AcceptanceCriteria[ContextType: Context](ABC):
-    """Base class for MC acceptance criteria."""
-
-    @abstractmethod
-    def evaluate(self, context: ContextType, energy_difference: float) -> bool: ...
+    from quansino.mc.criteria import Criteria
 
 
-class MonteCarlo[MoveType: BaseMove, ContextType: Context](Dynamics):
+class MonteCarlo[MoveProtocol: BaseProtocol, ContextType: Context](Dynamics):
     """
     Base-class for all Monte Carlo classes. This is a common interface for all Monte Carlo classes, and
     is not intended to be used directly. It is a subclass of the ASE Dynamics class,
-    and inherits all of its methods and attributes. The Monte Carlo class is responsible for selecting moves to perform via the [`yield_moves`][quansino.mc.core.MonteCarlo.yield_moves] method. This class is also responsible for managing the moves, their parameters (interval, probability, minimum count), and their acceptance criteria. Logging and trajectory writing are managed by the ASE parent class, Dynamics. When necessary, communication between the Monte Carlo simulation and the moves is facilitated by the context object. The Monte Carlo class and its subclasses should NOT directly modify the moves, but rather interact using the context object. The generics MoveType and ContextType are used to specify the type of move and context object, respectively. Moves themselves use a ContextType generics, the non-interaction between the Monte Carlo and the moves is enforced via the missing ContextType generics in the MoveType generics, i.e. The MonteCarlo class does not know what the context object of its moves is, only that it exists.
+    and inherits all of its methods and attributes. The Monte Carlo class is responsible for selecting moves to perform via the [`yield_moves`][quansino.mc.core.MonteCarlo.yield_moves] method. This class is also responsible for managing the moves, their parameters (interval, probability, minimum count), and their acceptance criteria. Logging and trajectory writing are managed by the ASE parent class, Dynamics. When necessary, communication between the Monte Carlo simulation and the moves is facilitated by the context object. The Monte Carlo class and its subclasses should NOT directly modify the moves, but rather interact using the context object. The generics MoveProtocol and ContextType are used to specify the type of move and context object, respectively. Moves themselves use a ContextType generics, the non-interaction between the Monte Carlo and the moves is enforced via the missing ContextType generics in the MoveProtocol generics, i.e. The MonteCarlo class does not know what the context object of its moves is, only that it exists.
 
     Parameters
     ----------
@@ -59,7 +53,7 @@ class MonteCarlo[MoveType: BaseMove, ContextType: Context](Dynamics):
 
     Attributes
     ----------
-    moves: dict[str, MoveStorage[MoveType, ContextType]]
+    moves: dict[str, MoveStorage[MoveProtocol, ContextType]]
         Dictionary of moves to perform.
     _seed: int
         Seed for the random number generator.
@@ -73,7 +67,8 @@ class MonteCarlo[MoveType: BaseMove, ContextType: Context](Dynamics):
         Context object for the simulation used to store the state of the simulation and provide information to the moves/criteria.
     """
 
-    acceptable_moves: ClassVar[dict[type[BaseMove], type[AcceptanceCriteria]]] = {}
+    default_criteria: ClassVar[dict[type[BaseProtocol], type[Criteria]]] = {}
+    default_context: ClassVar[type[Context]] = Context
 
     def __init__(
         self,
@@ -86,7 +81,7 @@ class MonteCarlo[MoveType: BaseMove, ContextType: Context](Dynamics):
         loginterval: int = 1,
     ) -> None:
         """Initialize the MonteCarlo object."""
-        self.moves: dict[str, MoveStorage[MoveType, ContextType]] = {}
+        self.moves: dict[str, MoveStorage[MoveProtocol]] = {}
 
         self._seed = seed or PCG64().random_raw()
         self._rng = RNG(PCG64(seed))
@@ -107,12 +102,12 @@ class MonteCarlo[MoveType: BaseMove, ContextType: Context](Dynamics):
         else:
             self.default_logger = None
 
-        self.context: ContextType = self.create_context(atoms, self._rng)
+        self.context = self.create_context(atoms, self._rng)
 
     def add_move(
         self,
-        move: MoveType,
-        criteria: AcceptanceCriteria[ContextType] | None = None,
+        move: MoveProtocol,
+        criteria: Criteria | None = None,
         name: str = "default",
         interval: int = 1,
         probability: float = 1.0,
@@ -123,9 +118,9 @@ class MonteCarlo[MoveType: BaseMove, ContextType: Context](Dynamics):
 
         Parameters
         ----------
-        move : MoveType
+        move : MoveProtocol
             The move to add to the Monte Carlo object.
-        criteria : AcceptanceCriteria[ContextType], optional
+        criteria : Criteria, optional
             The acceptance criteria for the move. If none, the move must be an instance of a known move type.
         name : str
             Name of the move.
@@ -137,9 +132,9 @@ class MonteCarlo[MoveType: BaseMove, ContextType: Context](Dynamics):
             The minimum number of times the move must be performed.
         """
         if criteria is None:
-            for acceptable_move in self.acceptable_moves:
+            for acceptable_move in self.default_criteria:
                 if isinstance(move, acceptable_move):
-                    criteria = self.acceptable_moves[acceptable_move]()
+                    criteria = self.default_criteria[acceptable_move]()
                     break
 
             if criteria is None:
@@ -156,7 +151,7 @@ class MonteCarlo[MoveType: BaseMove, ContextType: Context](Dynamics):
 
         move.attach_simulation(self.context)
 
-        self.moves[name] = MoveStorage[MoveType, ContextType](
+        self.moves[name] = MoveStorage[MoveProtocol](
             move=move,
             interval=interval,
             probability=probability,
@@ -164,7 +159,7 @@ class MonteCarlo[MoveType: BaseMove, ContextType: Context](Dynamics):
             criteria=criteria,
         )
 
-    def irun(self, steps=100_000_000) -> Generator[bool, None, None]:  # type: ignore
+    def irun(self, *args, **kwargs) -> Generator[bool, None, None]:  # type: ignore
         """
         Run the Monte Carlo simulation for a given number of steps.
 
@@ -178,27 +173,9 @@ class MonteCarlo[MoveType: BaseMove, ContextType: Context](Dynamics):
 
         self.validate_simulation()
 
-        self.max_steps = self.nsteps + steps
+        return super().irun(*args, **kwargs)
 
-        self.atoms.get_potential_energy()
-        self.call_observers()
-
-        is_converged = self.converged()
-        yield is_converged
-
-        while not is_converged and self.nsteps < self.max_steps:
-            self.step()
-            self.nsteps += 1
-
-            self.atoms.get_potential_energy()
-            self.call_observers()
-
-            is_converged = self.converged()
-            yield is_converged
-
-    def step(self) -> Any: ...  # type: ignore
-
-    def run(self, steps=100_000_000) -> bool:  # type: ignore
+    def run(self, *args, **kwargs) -> bool:  # type: ignore
         """
         Run the Monte Carlo simulation for a given number of steps.
 
@@ -207,9 +184,15 @@ class MonteCarlo[MoveType: BaseMove, ContextType: Context](Dynamics):
         bool
             True if the simulation is converged.
         """
-        return list(self.irun(steps=steps))[-1]
+        if self.default_logger:
+            self.default_logger.write_header()
 
-    def create_context(self, atoms: Atoms, rng: RNG) -> ContextType: ...
+        self.validate_simulation()
+
+        return super().run(*args, **kwargs)
+
+    def create_context(self, atoms: Atoms, rng: RNG) -> ContextType:
+        return cast(ContextType, self.default_context(atoms, rng))
 
     def validate_simulation(self) -> None:
         """Validate the simulation object by checking if the atoms object has a calculator attached to it."""
@@ -287,13 +270,13 @@ class MonteCarlo[MoveType: BaseMove, ContextType: Context](Dynamics):
 
 
 @dataclass
-class MoveStorage[MoveType: BaseMove, ContextType: Context]:
+class MoveStorage[MoveProtocol]:
     """
     Dataclass to store the moves and their acceptance criteria.
 
     Attributes
     ----------
-    move: MoveType
+    move: MoveProtocol
         The move object.
     interval: int
         The interval at which the move is selected.
@@ -305,8 +288,8 @@ class MoveStorage[MoveType: BaseMove, ContextType: Context]:
         The acceptance criteria for the move.
     """
 
-    move: MoveType
+    move: MoveProtocol
     interval: int
     probability: float
     minimum_count: int
-    criteria: AcceptanceCriteria[ContextType]
+    criteria: Criteria

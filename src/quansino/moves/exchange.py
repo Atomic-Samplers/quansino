@@ -10,16 +10,16 @@ from ase.build import molecule
 
 from quansino.mc.contexts import ExchangeContext
 from quansino.moves.displacements import DisplacementMove
-from quansino.moves.operations import Translation, TranslationRotation
+from quansino.operations.displacement import Translation, TranslationRotation
 
 if TYPE_CHECKING:
-    from quansino.moves.operations import CompositeOperation, Operation
+    from quansino.operations.core import Operation
     from quansino.type_hints import IntegerArray
 
 
-class ExchangeMove[
-    OperationType: Operation | CompositeOperation, ContextType: ExchangeContext
-](DisplacementMove[OperationType, ContextType]):
+class ExchangeMove[OperationType: Operation, ContextType: ExchangeContext](
+    DisplacementMove[OperationType, ContextType]
+):
     """
     Class for atomic/molecular exchange moves that exchanges atom(s). The class will either add `exchange_atoms` in the unit cell or delete a (group) of atom(s) present in `labels`. In the former, this is done using the `attempt_move` method in the parent [`DisplacementMove`][quansino.moves.displacements.DisplacementMove] class using the provided [`operation`][quansino.moves.operations.Operation] (Translation by default i.e. newly added atoms are attempted to be placed anywhere in the cell). Deletion will be attempted on any non-negative integers in `labels` from the parent class [`DisplacementMove`][quansino.moves.displacements.DisplacementMove]. When successful, the [`save_state()`][quansino.mc.contexts.ExchangeContext.save_state] method must be called to update the `labels` of any other [`DisplacementMoves`][quansino.moves.displacements.DisplacementMove] objects linked to the simulation to keep them in sync with the newly added or removed atoms.
 
@@ -120,7 +120,7 @@ class ExchangeMove[
                 return self.register_failure()
 
             self.context.added_indices = self.context.moving_indices
-            self.context.particle_delta += len(self.to_add_atoms)
+            self.context.particle_delta += 1
             self.context.added_atoms = self.to_add_atoms
         else:
             if self.to_delete_indices is None:
@@ -138,7 +138,7 @@ class ExchangeMove[
             self.context.deleted_atoms = self.context.atoms[
                 self.context.deleted_indices
             ]  # type: ignore
-            self.context.particle_delta -= len(self.context.deleted_atoms)
+            self.context.particle_delta -= 1
             self.deletion()
 
         if bool(self.context.added_atoms) or bool(self.context.deleted_atoms):

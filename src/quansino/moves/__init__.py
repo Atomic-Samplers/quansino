@@ -2,9 +2,15 @@
 
 from __future__ import annotations
 
-from quansino.moves.composite import CompositeDisplacementMove
+from quansino.moves.cell import CellMove
 from quansino.moves.core import BaseMove
-from quansino.moves.displacements import DisplacementMove
+from quansino.moves.displacements import CompositeDisplacementMove, DisplacementMove
 from quansino.moves.exchange import ExchangeMove
 
-__all__ = ["BaseMove", "CompositeDisplacementMove", "DisplacementMove", "ExchangeMove"]
+__all__ = [
+    "BaseMove",
+    "CellMove",
+    "CompositeDisplacementMove",
+    "DisplacementMove",
+    "ExchangeMove",
+]

@@ -2,50 +2,26 @@
 
 from __future__ import annotations
 
-import math
 from typing import TYPE_CHECKING, Any, ClassVar
+from warnings import warn
 
-from ase.units import kB
+import numpy as np
 
 from quansino.mc.contexts import DisplacementContext
-from quansino.mc.core import AcceptanceCriteria, MonteCarlo, MoveStorage
-from quansino.moves.displacements import CompositeDisplacementMove, DisplacementMove
+from quansino.mc.core import MonteCarlo, MoveStorage
+from quansino.mc.criteria import CanonicalCriteria
+from quansino.moves.displacements import DisplacementMove
+from quansino.moves.protocol import DisplacementProtocol
 
 if TYPE_CHECKING:
     from collections.abc import Generator
 
     from ase.atoms import Atoms
-    from numpy.random import Generator as RNG
 
 
-class MetropolisCriteria(AcceptanceCriteria[DisplacementContext]):
-    """Default criteria for accepting or rejecting a Monte Carlo move in the canonical ensemble."""
-
-    def evaluate(self, context, energy_difference: float) -> bool:
-        """
-        Evaluate the acceptance criteria for a Monte Carlo move.
-
-        Parameters
-        ----------
-        context : DisplacementContext
-            The context of the Monte Carlo simulation.
-        energy_difference : float
-            The energy difference between the current and proposed states.
-
-        Returns
-        -------
-        bool
-            True if the move is accepted, False otherwise.
-        """
-        return energy_difference < 0 or context.rng.random() < math.exp(
-            -energy_difference / (context.temperature * kB)
-        )
-
-
-class Canonical[
-    MoveType: DisplacementMove | CompositeDisplacementMove,
-    ContextType: DisplacementContext,
-](MonteCarlo[MoveType, ContextType]):
+class Canonical[MoveProtocol: DisplacementProtocol, ContextType: DisplacementContext](
+    MonteCarlo[MoveProtocol, ContextType]
+):
     """
     Canonical Monte Carlo simulation object.
 
@@ -72,14 +48,15 @@ class Canonical[
         The acceptance rate of the moves in the last step.
     """
 
-    acceptable_moves: ClassVar = {DisplacementMove: MetropolisCriteria}
+    default_criteria: ClassVar = {DisplacementMove: CanonicalCriteria}
+    default_context: ClassVar = DisplacementContext
 
     def __init__(
         self,
         atoms: Atoms,
         temperature: float,
         num_cycles: int | None = None,
-        default_move: MoveStorage[MoveType, ContextType] | MoveType | None = None,
+        default_move: MoveStorage[MoveProtocol] | MoveProtocol | None = None,
         **mc_kwargs,
     ) -> None:
         """Initialize the Canonical Monte Carlo object."""
@@ -101,6 +78,8 @@ class Canonical[
                 default_move.probability,
                 default_move.minimum_count,
             )
+
+        self.last_results: dict[str, Any] = {}
 
         if self.default_logger:
             self.default_logger.add_field("AcptRate", lambda: self.acceptance_rate)
@@ -124,7 +103,7 @@ class Canonical[
         float
             The energy difference.
         """
-        return self.atoms.get_potential_energy() - self.context.last_results["energy"]
+        return self.atoms.get_potential_energy() - self.last_results["energy"]
 
     def yield_moves(self) -> Generator[str, None, None]:
         """
@@ -140,48 +119,42 @@ class Canonical[
             move = move_storage.move
 
             if move():
-                energy_difference = self.calculate_energy_difference()
-
-                is_accepted = move_storage.criteria.evaluate(
-                    self.context, energy_difference
-                )
+                is_accepted = move_storage.criteria.evaluate(self.context)
 
                 if is_accepted:
-                    self.context.save_state()
+                    self.save_state()
                     yield move_name
                 else:
-                    self.context.revert_state()
-
-    def create_context(self, atoms: Atoms, rng: RNG) -> DisplacementContext:
-        """
-        Create a displacement context for the simulation.
-
-        Parameters
-        ----------
-        atoms : Atoms
-            The atomic configuration.
-        rng : RNG
-            The random number generator.
-
-        Returns
-        -------
-        DisplacementContext
-            The context for the Monte Carlo simulation.
-        """
-        return DisplacementContext(atoms, rng)
+                    self.revert_state()
 
     def pre_step(self) -> None:
         """Perform operations before the Monte Carlo step."""
-        if not self.context.last_results.get("energy", None):
-            self.atoms.get_potential_energy()
-            self.context.last_results = self.atoms.calc.results  # type: ignore
-
-        self.context.last_positions = self.atoms.get_positions()
+        if np.isnan(self.context.last_energy):
+            self.context.last_energy = self.atoms.get_potential_energy()
+            self.last_results = self.atoms.calc.results  # type: ignore
 
     def step(self) -> Any:
         """Perform a single Monte Carlo step, iterating over all selected moves."""
         self.pre_step()
-
         self.accepted_moves = list(self.yield_moves())
-
         self.acceptance_rate = len(self.accepted_moves) / self.num_cycles
+
+    def save_state(self) -> None:
+        """Save the current state of the context and update the last positions and results."""
+        self.context.last_positions = self.atoms.get_positions()
+        try:
+            self.last_results = self.atoms.calc.results  # type: ignore
+        except AttributeError:
+            warn(
+                "Atoms object does not have calculator results attached.", stacklevel=2
+            )
+            self.last_results = {}
+
+    def revert_state(self) -> None:
+        """Revert to the previously saved state and undo the last move."""
+        self.atoms.positions = self.context.last_positions
+        try:
+            self.atoms.calc.atoms = self.atoms  # type: ignore
+            self.atoms.calc.results = self.last_results  # type: ignore
+        except AttributeError:
+            warn("Atoms object does not have calculator attached.", stacklevel=2)

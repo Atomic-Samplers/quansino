@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from copy import copy
+from types import MethodType
 
 import numpy as np
 import pytest
@@ -16,7 +17,7 @@ from quansino.mc.core import MoveStorage
 from quansino.mc.gcmc import GrandCanonical, GrandCanonicalCriteria
 from quansino.moves.displacements import DisplacementMove
 from quansino.moves.exchange import ExchangeMove
-from quansino.moves.operations import Translation
+from quansino.operations.displacement import Translation
 
 
 def test_grand_canonical(bulk_large):
@@ -37,7 +38,7 @@ def test_grand_canonical(bulk_large):
         temperature=1000,
         chemical_potential=energy_difference,
         num_cycles=1,
-        number_of_particles=len(bulk_large),
+        number_of_exchange_particles=len(bulk_large),
         seed=42,
     )
 
@@ -67,13 +68,13 @@ def test_grand_canonical(bulk_large):
 
     gcmc.number_of_particles = len(bulk_large)
 
-    assert gcmc.context.number_of_particles == len(bulk_large)
+    assert gcmc.context.number_of_exchange_particles == len(bulk_large)
     assert gcmc.number_of_particles == len(bulk_large)
 
     exchange_move.set_labels(np.arange(len(bulk_large)))
 
     current_atoms_count = len(bulk_large)
-    labels = np.array(gcmc.context.moves["default"].move.labels)
+    labels = np.array(gcmc.moves["default"].move.labels)
 
     for _ in gcmc.irun(1000):
         assert gcmc.temperature == 2000
@@ -83,7 +84,7 @@ def test_grand_canonical(bulk_large):
 
         if len(gcmc.atoms) != current_atoms_count:
             assert bool(gcmc.context.added_atoms) ^ bool(gcmc.context.deleted_atoms)
-            assert len(bulk_large) == gcmc.context.number_of_particles
+            assert len(bulk_large) == gcmc.context.number_of_exchange_particles
             assert len(bulk_large) == current_atoms_count + gcmc.context.particle_delta
 
             assert gcmc.context.accessible_volume == bulk_large.cell.volume
@@ -95,7 +96,7 @@ def test_grand_canonical(bulk_large):
                 assert len(labels) + len(gcmc.context.added_indices) == len(
                     gcmc.moves["default"].move.labels
                 )
-                assert max(labels) + 1 in gcmc.context.moves["default"].move.labels
+                assert max(labels) + 1 in gcmc.moves["default"].move.labels
             elif gcmc.context.deleted_atoms:
                 assert gcmc.context.particle_delta == -len(gcmc.context.deleted_atoms)
                 assert len(gcmc.context.deleted_indices) == len(
@@ -104,13 +105,13 @@ def test_grand_canonical(bulk_large):
 
                 assert (
                     labels[gcmc.context.deleted_indices]
-                    not in gcmc.context.moves["default"].move.labels
+                    not in gcmc.moves["default"].move.labels
                 )
 
             current_atoms_count = len(gcmc.atoms)
-            labels = np.array(gcmc.context.moves["default"].move.labels)
+            labels = np.array(gcmc.moves["default"].move.labels)
         else:
-            assert_array_equal(labels, gcmc.context.moves["default"].move.labels)
+            assert_array_equal(labels, gcmc.moves["default"].move.labels)
             assert current_atoms_count == len(gcmc.atoms)
 
     assert len(gcmc.atoms) == 901
@@ -146,7 +147,7 @@ def test_grand_canonical_defaults(bulk_medium):
         chemical_potential=energy_difference,
         num_cycles=1,
         default_exchange_move=move_storage,
-        number_of_particles=len(bulk_medium),
+        number_of_exchange_particles=len(bulk_medium),
         seed=42,
     )
 
@@ -168,7 +169,7 @@ def test_grand_canonical_defaults(bulk_medium):
         num_cycles=1,
         default_exchange_move=exchange_move,
         default_displacement_move=displacement_move,
-        number_of_particles=len(bulk_medium),
+        number_of_exchange_particles=len(bulk_medium),
         seed=42,
     )
 
@@ -195,11 +196,11 @@ def test_grand_canonical_defaults(bulk_medium):
 
     gcmc.chemical_potential = energy_difference * 1.56
 
-    assert gcmc.context.number_of_particles == len(bulk_medium)
+    assert gcmc.context.number_of_exchange_particles == len(bulk_medium)
     assert gcmc.number_of_particles == len(bulk_medium)
 
     current_atoms_count = len(bulk_medium)
-    labels = np.array(gcmc.context.moves["default_exchange"].move.labels)
+    labels = np.array(gcmc.moves["default_exchange"].move.labels)
 
     for _ in gcmc.irun(1000):
         assert gcmc.temperature == 2000
@@ -209,7 +210,7 @@ def test_grand_canonical_defaults(bulk_medium):
 
         if len(gcmc.atoms) != current_atoms_count:
             assert bool(gcmc.context.added_atoms) ^ bool(gcmc.context.deleted_atoms)
-            assert len(bulk_medium) == gcmc.context.number_of_particles
+            assert len(bulk_medium) == gcmc.context.number_of_exchange_particles
             assert len(bulk_medium) == current_atoms_count + gcmc.context.particle_delta
 
             assert gcmc.context.accessible_volume == bulk_medium.cell.volume
@@ -221,10 +222,7 @@ def test_grand_canonical_defaults(bulk_medium):
                 assert len(labels) + len(gcmc.context.added_indices) == len(
                     gcmc.moves["default_exchange"].move.labels
                 )
-                assert (
-                    max(labels) + 1
-                    in gcmc.context.moves["default_exchange"].move.labels
-                )
+                assert max(labels) + 1 in gcmc.moves["default_exchange"].move.labels
             elif gcmc.context.deleted_atoms:
                 assert gcmc.context.particle_delta == -len(gcmc.context.deleted_atoms)
                 assert len(gcmc.context.deleted_indices) == len(
@@ -233,24 +231,30 @@ def test_grand_canonical_defaults(bulk_medium):
 
                 assert (
                     labels[gcmc.context.deleted_indices]
-                    not in gcmc.context.moves["default_exchange"].move.labels
+                    not in gcmc.moves["default_exchange"].move.labels
                 )
 
             current_atoms_count = len(gcmc.atoms)
-            labels = np.array(gcmc.context.moves["default_exchange"].move.labels)
+            labels = np.array(gcmc.moves["default_exchange"].move.labels)
         else:
-            assert_array_equal(
-                labels, gcmc.context.moves["default_exchange"].move.labels
-            )
+            assert_array_equal(labels, gcmc.moves["default_exchange"].move.labels)
             assert current_atoms_count == len(gcmc.atoms)
 
-        assert gcmc.context.moves["displacement_0"].move.default_label == -1
+        assert gcmc.moves["displacement_0"].move.default_label == -1
 
 
 def test_grand_canonical_criteria(rng):
-    context = ExchangeContext(Atoms(), rng, {})
+    context = ExchangeContext(Atoms(), rng)
+    context.last_energy = 0.0
 
-    context.number_of_particles = 1
+    dummy_value = -np.inf
+
+    def dummy_energy():
+        return dummy_value
+
+    context.atoms.get_potential_energy = MethodType(dummy_energy, context.atoms)
+
+    context.number_of_exchange_particles = 1
     context.accessible_volume = 10
 
     context.particle_delta = 1
@@ -258,13 +262,13 @@ def test_grand_canonical_criteria(rng):
     context.temperature = 298
 
     with pytest.raises(ValueError):
-        GrandCanonicalCriteria().evaluate(context, -np.inf)
+        GrandCanonicalCriteria().evaluate(context)
 
     context.added_atoms = Atoms("Cu")
 
     criteria = GrandCanonicalCriteria()
 
-    assert criteria.evaluate(context, -np.inf)
+    assert criteria.evaluate(context)
 
     dihydrogen = molecule("H2")
 
@@ -290,7 +294,8 @@ def test_grand_canonical_criteria(rng):
     context.added_atoms = dihydrogen
 
     probability = context.accessible_volume / (
-        debroglie_wavelength**3 * (context.number_of_particles + context.particle_delta)
+        debroglie_wavelength**3
+        * (context.number_of_exchange_particles + context.particle_delta)
     )
 
     assert np.allclose(probability, 13.83662789)
@@ -304,8 +309,9 @@ def test_grand_canonical_criteria(rng):
 
     assert np.allclose(probability, 0.28172731)
 
-    criteria.evaluate(context, -9.9)
+    dummy_value = -9.9
 
-    successes = sum(criteria.evaluate(context, -9.9) for _ in range(100000))
+    criteria.evaluate(context)
 
+    successes = sum(criteria.evaluate(context) for _ in range(100000))
     assert np.allclose(successes / 100000, probability, atol=0.01)

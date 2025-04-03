@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 from ase.calculators.calculator import Calculator
 
-from quansino.mc.core import AcceptanceCriteria, MonteCarlo
+from quansino.mc.core import MonteCarlo
+from quansino.mc.criteria import Criteria
 from quansino.moves.displacements import DisplacementMove
 
 
@@ -43,8 +44,8 @@ def test_mc_class(bulk_small):
 def test_mc_yield_moves(bulk_small):
     mc = MonteCarlo(bulk_small, seed=42)
 
-    class DummyCriteria(AcceptanceCriteria):
-        def evaluate(self, context, energy_difference: float) -> bool:
+    class DummyCriteria(Criteria):
+        def evaluate(self) -> bool:
             return True
 
     assert list(mc.yield_moves()) == []

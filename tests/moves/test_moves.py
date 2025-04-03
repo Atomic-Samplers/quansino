@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from copy import copy, deepcopy
 from types import MethodType
-from typing import Any
 
 import numpy as np
 import pytest
@@ -13,11 +12,12 @@ from numpy.testing import assert_allclose, assert_array_equal, assert_array_less
 from scipy.stats import chisquare
 
 from quansino.mc.contexts import DisplacementContext, ExchangeContext
-from quansino.mc.core import AcceptanceCriteria, MoveStorage
-from quansino.moves.composite import CompositeDisplacementMove
-from quansino.moves.displacements import DisplacementMove
+from quansino.mc.core import MoveStorage
+from quansino.mc.criteria import Criteria
+from quansino.mc.gcmc import GrandCanonical
+from quansino.moves.displacements import CompositeDisplacementMove, DisplacementMove
 from quansino.moves.exchange import ExchangeMove
-from quansino.moves.operations import (
+from quansino.operations import (
     Ball,
     Box,
     Operation,
@@ -29,19 +29,17 @@ from quansino.moves.operations import (
 
 
 def test_displacement_move(bulk_small, rng):
-    move = DisplacementMove[Any, DisplacementContext](np.arange(len(bulk_small)))
-
+    move = DisplacementMove(np.arange(len(bulk_small)))
     context = DisplacementContext(bulk_small, rng)
 
-    def dummy_calculate(self: DisplacementMove, energy_difference) -> None:
-        self.context.atoms.set_positions(np.zeros((len(self.context.atoms), 3)))
+    def dummy_calculate(context: DisplacementContext) -> None:
+        context.atoms.set_positions(np.zeros((len(context.atoms), 3)))
 
-    move.calculate = MethodType(dummy_calculate, move)
+    move.operation.calculate = MethodType(dummy_calculate, move.operation)
 
     move.attach_simulation(context)
 
     assert move.context is not None
-
     assert move.context.atoms is not None
     assert move.context.rng is not None
 
@@ -56,7 +54,7 @@ def test_displacement_move(bulk_small, rng):
 
     move.labels = [1, 1, 1, 0]
 
-    move.calculate(move.context)
+    move.operation.calculate(move.context)
 
     assert_allclose(bulk_small.get_positions(), np.zeros((len(bulk_small), 3)))
 
@@ -74,7 +72,7 @@ def test_sphere_move(bulk_small, rng):
     move = DisplacementMove(np.arange(len(bulk_small)), Sphere(0.1))
 
     assert not hasattr(move, "context")
-    assert move.operation.step_size == 0.1  # type: ignore
+    assert move.operation.step_size == 0.1
 
     move.attach_simulation(context)
 
@@ -301,21 +299,23 @@ def test_exchange_move(empty_atoms, rng):
 
     exchange_atoms = Atoms("H", positions=initial_position)
 
-    move = ExchangeMove[Operation, ExchangeContext](
-        exchange_atoms=exchange_atoms, exchangeable_labels=[]
-    )
+    move = ExchangeMove(exchange_atoms=exchange_atoms, exchangeable_labels=[])
 
-    class DummyCriteria(AcceptanceCriteria):
-        def evaluate(self, context, energy_difference):
+    class DummyCriteria(Criteria):
+        def evaluate(self, energy_difference):
             return energy_difference < 0
 
-    move_storage = MoveStorage[DisplacementMove, ExchangeContext](
-        move, 0, 0, 0, DummyCriteria()
+    move_storage = MoveStorage(move, 0, 0, 0, DummyCriteria())
+
+    gcmc = GrandCanonical(
+        empty_atoms,
+        temperature=1000,
+        chemical_potential=0.0,
+        num_cycles=1,
+        number_of_exchange_particles=len(empty_atoms),
+        default_exchange_move=move_storage,
+        seed=42,
     )
-
-    context = ExchangeContext(empty_atoms, rng, moves={"default": move_storage})
-
-    move.attach_simulation(context)
 
     move.bias_towards_insert = 1.0
 
@@ -326,7 +326,7 @@ def test_exchange_move(empty_atoms, rng):
 
     old_positions = empty_atoms.get_positions()
 
-    context.save_state()
+    gcmc.save_state()
     assert_array_equal(move.labels, [0])
 
     empty_atoms.set_cell(np.eye(3) * 100)
@@ -343,7 +343,7 @@ def test_exchange_move(empty_atoms, rng):
 
     for _ in range(100):
         assert move()
-        move.context.revert_state()
+        gcmc.revert_state()
         assert empty_atoms == old_atoms
 
     assert len(empty_atoms) == 1
@@ -352,7 +352,7 @@ def test_exchange_move(empty_atoms, rng):
 
     for _ in range(100):
         assert move()
-        move.context.save_state()
+        gcmc.save_state()
 
     assert move.context.added_indices is not None
     assert len(move.context.deleted_indices) == 0
@@ -377,11 +377,11 @@ def test_exchange_move(empty_atoms, rng):
     move.context.deleted_atoms = Atoms()
 
     with pytest.raises(ValueError):
-        move.context.revert_state()
+        gcmc.revert_state()
 
     move.context.deleted_atoms = old_deleted_atoms
 
-    move.context.revert_state()
+    gcmc.revert_state()
     assert empty_atoms == old_atoms
 
     move.set_labels(np.full(101, -1))
@@ -394,7 +394,7 @@ def test_exchange_move(empty_atoms, rng):
 
     for _ in range(100):
         assert move()
-        move.context.revert_state()
+        gcmc.revert_state()
         assert empty_atoms == old_atoms
 
     while len(move.labels) > 1:
@@ -407,7 +407,7 @@ def test_exchange_move(empty_atoms, rng):
             is_deletion = False
 
         assert move()
-        move.context.save_state()
+        gcmc.save_state()
 
         if is_deletion:
             assert move.context.deleted_indices is not None
@@ -421,33 +421,39 @@ def test_exchange_move(empty_atoms, rng):
 
 
 def test_displacement_move_with_exchange_context(bulk_small, rng):
-    move = DisplacementMove[Operation, DisplacementContext](
-        np.arange(len(bulk_small)), Ball(0.1)
+    move = DisplacementMove(np.arange(len(bulk_small)), Ball(0.1))
+
+    class DummyCriteria(Criteria):
+        def evaluate(self):
+            return True
+
+    move_storage = MoveStorage(move, 0, 0, 0, DummyCriteria())
+
+    gcmc = GrandCanonical(  # Delete this, this should be tested in the GrandCanonical tests
+        bulk_small,
+        temperature=1000,
+        chemical_potential=0.0,
+        num_cycles=1,
+        number_of_exchange_particles=len(bulk_small),
+        default_exchange_move=move_storage,
+        seed=42,
     )
 
-    class DummyCriteria(AcceptanceCriteria[ExchangeContext]):
-        def evaluate(self, context, energy_difference):
-            return energy_difference < 0
-
-    move_storage = MoveStorage[DisplacementMove, ExchangeContext](
-        move, 0, 0, 0, DummyCriteria()
-    )
-
-    context = ExchangeContext(bulk_small, rng, moves={"default": move_storage})
+    context = ExchangeContext(bulk_small, rng)
     move.context = context
 
     old_atoms = bulk_small.copy()
 
     for _ in range(1000):
         assert move()
-        move.context.revert_state()
+        gcmc.revert_state()
         assert bulk_small == old_atoms
 
 
 def test_molecular_exchange_move(rng):
     atoms = Atoms()
 
-    move = ExchangeMove[Operation, ExchangeContext]("H2O", [])
+    move = ExchangeMove("H2O", [])
 
     exchange_atoms = move.exchange_atoms
 
@@ -455,17 +461,21 @@ def test_molecular_exchange_move(rng):
         exchange_atoms.positions[:, None] - exchange_atoms.positions, axis=-1
     )
 
-    class DummyCriteria(AcceptanceCriteria):
-        def evaluate(self, context, energy_difference):
-            return energy_difference < 0
+    class DummyCriteria(Criteria):
+        def evaluate(self):
+            return True
 
-    move_storage = MoveStorage[
-        DisplacementMove[Operation, ExchangeContext], ExchangeContext
-    ](move, 0, 0, 0, DummyCriteria())
+    move_storage = MoveStorage(move, 0, 0, 0, DummyCriteria())
 
-    context = ExchangeContext(atoms, rng, moves={"default": move_storage})
-
-    move.attach_simulation(context)
+    gcmc = GrandCanonical(
+        atoms,
+        temperature=1000,
+        chemical_potential=0.0,
+        num_cycles=1,
+        number_of_exchange_particles=len(atoms),
+        default_exchange_move=move_storage,
+        seed=42,
+    )
 
     move.bias_towards_insert = 1.0
 
@@ -478,7 +488,7 @@ def test_molecular_exchange_move(rng):
 
     assert move()
     assert len(atoms) == 3
-    move.context.save_state()
+    gcmc.save_state()
 
     new_distance = np.linalg.norm(atoms.positions[:, None] - atoms.positions, axis=-1)
 
@@ -492,12 +502,12 @@ def test_molecular_exchange_move(rng):
 
     for _ in range(1000):
         assert move()
-        move.context.revert_state()
+        gcmc.revert_state()
         assert atoms == old_atoms
 
     for _ in range(100):
         assert move()
-        move.context.save_state()
+        gcmc.save_state()
 
     assert move.context.added_indices is not None
     assert len(move.context.deleted_atoms) == 0
@@ -509,7 +519,7 @@ def test_molecular_exchange_move(rng):
 
     for _ in range(100):
         assert move()
-        move.context.revert_state()
+        gcmc.revert_state()
         assert atoms == old_atoms
 
     assert len(atoms) == 303
@@ -518,28 +528,33 @@ def test_molecular_exchange_move(rng):
         to_delete = rng.choice(move.unique_labels)
         move.to_delete_indices = to_delete
         assert move()
-        move.context.save_state()
+        gcmc.save_state()
 
         assert move.context.deleted_indices is not None
         assert move.to_delete_indices is None
         assert not np.isin(move.unique_labels, to_delete).any()
 
 
-def test_displacement_calculator_consistency(bulk_small, rng):
-    context = DisplacementContext(bulk_small, rng)
+def test_displacement_calculator_consistency(bulk_small):
+    move = DisplacementMove(np.arange(len(bulk_small)), Sphere(0.1))
 
-    move = DisplacementMove[Operation, DisplacementContext](
-        np.arange(len(bulk_small)), Sphere(0.1)
+    gcmc = GrandCanonical(
+        bulk_small,
+        temperature=1000,
+        chemical_potential=0.0,
+        num_cycles=1,
+        number_of_exchange_particles=len(bulk_small),
+        default_displacement_move=move,
+        seed=42,
     )
-    move.attach_simulation(context)
 
     for _ in range(100):
         assert move()
         bulk_small.get_potential_energy()
-        move.context.save_state()
-        assert context.last_results == bulk_small.calc.results
+        gcmc.save_state()
+        assert gcmc.last_results == bulk_small.calc.results
         assert move()
-        move.context.revert_state()
+        gcmc.revert_state()
         assert len(bulk_small.calc.check_state(bulk_small)) == 0
         assert (
             bulk_small.calc.get_property("energy", bulk_small, allow_calculation=False)
@@ -557,29 +572,31 @@ def test_exchange_calculator_consistency(empty_atoms, rng):
 
     empty_atoms.set_positions(rng.uniform(-50, 50, (100, 3)))
 
-    move = ExchangeMove[Operation, ExchangeContext](
-        exchange_atoms, np.arange(100), Translation()
-    )
+    move = ExchangeMove(exchange_atoms, np.arange(100), Translation())
 
-    class DummyCriteria(AcceptanceCriteria):
+    class DummyCriteria(Criteria):
         def evaluate(self, context, energy_difference):
             return energy_difference < 0
 
-    move_storage = MoveStorage[DisplacementMove, ExchangeContext](
-        move, 0, 0, 0, DummyCriteria()
+    move_storage = MoveStorage(move, 0, 0, 0, DummyCriteria())
+
+    gcmc = GrandCanonical(
+        empty_atoms,
+        temperature=1000,
+        chemical_potential=0.0,
+        num_cycles=1,
+        number_of_exchange_particles=len(empty_atoms),
+        default_exchange_move=move_storage,
+        seed=42,
     )
-
-    context = ExchangeContext(empty_atoms, rng, moves={"default": move_storage})
-
-    move.attach_simulation(context)
 
     for _ in range(100):
         assert move()
         empty_atoms.get_potential_energy()
-        move.context.save_state()
-        assert context.last_results == empty_atoms.calc.results
+        gcmc.save_state()
+        assert gcmc.last_results == empty_atoms.calc.results
         assert move()
-        move.context.revert_state()
+        gcmc.revert_state()
         assert len(empty_atoms.calc.check_state(empty_atoms)) == 0
         assert (
             empty_atoms.calc.get_property(

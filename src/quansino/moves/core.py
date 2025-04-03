@@ -2,14 +2,8 @@
 
 from __future__ import annotations
 
-from abc import abstractmethod
-from typing import TYPE_CHECKING
-
 from quansino.mc.contexts import Context
-from quansino.moves.operations import Operation
-
-if TYPE_CHECKING:
-    from quansino.type_hints import Displacement
+from quansino.operations.core import Operation
 
 
 class BaseMove[OperationType: Operation, ContextType: Context]:
@@ -44,15 +38,6 @@ class BaseMove[OperationType: Operation, ContextType: Context]:
         """Initialize the BaseMove object."""
         self.operation = operation
         self.apply_constraints: bool = apply_constraints
-
-    @abstractmethod
-    def attempt_move(self, *args, **kwargs) -> bool: ...
-
-    @abstractmethod
-    def __call__(self) -> bool: ...
-
-    @abstractmethod
-    def calculate(self) -> Displacement: ...
 
     def attach_simulation(self, context: ContextType) -> None:
         """

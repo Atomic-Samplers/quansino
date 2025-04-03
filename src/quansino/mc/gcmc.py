@@ -2,87 +2,24 @@
 
 from __future__ import annotations
 
-import math
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
 
-import numpy as np
-from ase.units import _e, _hplanck, _Nav, kB
-
-from quansino.mc.canonical import Canonical, MetropolisCriteria
+from quansino.mc.canonical import Canonical
 from quansino.mc.contexts import ExchangeContext
-from quansino.mc.core import AcceptanceCriteria, MoveStorage
+from quansino.mc.core import MoveStorage
+from quansino.mc.criteria import CanonicalCriteria, GrandCanonicalCriteria
 from quansino.moves.displacements import DisplacementMove
 from quansino.moves.exchange import ExchangeMove
+from quansino.moves.protocol import ExchangeProtocol
+from quansino.utils.atoms import reinsert_atoms
 
 if TYPE_CHECKING:
     from ase.atoms import Atoms
     from numpy.random import Generator as RNG
 
 
-class GrandCanonicalCriteria[ContextType: ExchangeContext](
-    AcceptanceCriteria[ContextType]
-):
-    """Default criteria for accepting or rejecting a Monte Carlo move in the Grand Canonical ensemble."""
-
-    def evaluate(self, context, energy_difference: float) -> bool:
-        """
-        Evaluate the acceptance criteria for a Monte Carlo move.
-
-        Parameters
-        ----------
-        context : ContextType
-            The context of the Monte Carlo simulation.
-        energy_difference : float
-            The energy difference between the current and proposed states.
-
-        Returns
-        -------
-        bool
-            True if the move is accepted, False otherwise.
-        """
-        number_of_particles = context.number_of_particles
-        particle_delta = context.particle_delta
-
-        volume = context.accessible_volume**particle_delta
-
-        if context.added_atoms:
-            mass = context.added_atoms.get_masses().sum()
-        elif context.deleted_atoms:
-            mass = context.deleted_atoms.get_masses().sum()
-        else:
-            raise ValueError("No atoms were added or deleted.")
-
-        factorial_term = 1
-        if particle_delta > 0:
-            for i in range(
-                number_of_particles + 1, number_of_particles + particle_delta + 1
-            ):
-                factorial_term /= i
-        elif particle_delta < 0:
-            for i in range(
-                number_of_particles + particle_delta + 1, number_of_particles + 1
-            ):
-                factorial_term *= i
-
-        debroglie_wavelength = (
-            math.sqrt(
-                _hplanck**2
-                / (2 * np.pi * mass * kB * context.temperature / _Nav * 1e-3 * _e)
-            )
-            * 1e10
-        ) ** (-3 * particle_delta)
-
-        prefactor = volume * factorial_term * debroglie_wavelength
-        exponential = (
-            particle_delta * context.chemical_potential - energy_difference
-        ) / (context.temperature * kB)
-        criteria = math.exp(exponential)
-
-        return context.rng.random() < criteria * prefactor
-
-
-class GrandCanonical[MoveType: DisplacementMove, ContextType: ExchangeContext](
-    Canonical[DisplacementMove, ExchangeContext]
+class GrandCanonical[MoveProtocol: ExchangeProtocol, ContextType: ExchangeContext](
+    Canonical[MoveProtocol, ContextType]
 ):
     """
     Grand Canonical (μVT) Monte Carlo object.
@@ -101,14 +38,14 @@ class GrandCanonical[MoveType: DisplacementMove, ContextType: ExchangeContext](
         The number of Monte Carlo cycles.
     default_displacement_move : DisplacementMove, optional
         The default displacement move.
-    default_exchange_move : MoveStorage[MoveType, ContextType] | MoveType, optional
+    default_exchange_move : MoveStorage[MoveProtocol, ContextType] | MoveProtocol, optional
         The default exchange move.
     **mc_kwargs
         Additional keyword arguments for the Monte Carlo simulation.
 
     Attributes
     ----------
-    acceptable_moves : ClassVar[dict[MoveType, AcceptanceCriteria]]
+    acceptable_moves : ClassVar[dict[MoveProtocol, AcceptanceCriteria]]
         A dictionary mapping move types to their acceptance criteria.
     context : ExchangeContext
         The context of the Monte Carlo simulation.
@@ -116,22 +53,21 @@ class GrandCanonical[MoveType: DisplacementMove, ContextType: ExchangeContext](
         The number of particles in the simulation.
     """
 
-    acceptable_moves: ClassVar = {
+    default_criteria: ClassVar = {
         ExchangeMove: GrandCanonicalCriteria,
-        DisplacementMove: MetropolisCriteria,
+        DisplacementMove: CanonicalCriteria,
     }
+    default_context: ClassVar = ExchangeContext
 
     def __init__(
         self,
         atoms: Atoms,
         temperature: float,
         chemical_potential: float,
-        number_of_particles: int,
+        number_of_exchange_particles: int,
         num_cycles: int,
-        default_displacement_move: DisplacementMove | None = None,
-        default_exchange_move: (
-            MoveStorage[MoveType, ExchangeContext] | MoveType | None
-        ) = None,
+        default_displacement_move: MoveProtocol | None = None,
+        default_exchange_move: MoveStorage[MoveProtocol] | MoveProtocol | None = None,
         **mc_kwargs,
     ) -> None:
         """
@@ -151,7 +87,7 @@ class GrandCanonical[MoveType: DisplacementMove, ContextType: ExchangeContext](
             The number of Monte Carlo cycles.
         default_displacement_move : DisplacementMove, optional
             The default displacement move.
-        default_exchange_move : MoveStorage[MoveType, ContextType] | MoveType, optional
+        default_exchange_move : MoveStorage[MoveProtocol, ContextType] | MoveProtocol, optional
             The default exchange move.
         **mc_kwargs
             Additional keyword arguments for the Monte Carlo simulation.
@@ -165,7 +101,7 @@ class GrandCanonical[MoveType: DisplacementMove, ContextType: ExchangeContext](
         )
 
         self.context.chemical_potential = chemical_potential
-        self.number_of_particles = number_of_particles
+        self.number_of_exchange_particles = number_of_exchange_particles
 
         if isinstance(default_exchange_move, DisplacementMove):
             self.add_move(default_exchange_move, name="default_exchange")
@@ -179,7 +115,7 @@ class GrandCanonical[MoveType: DisplacementMove, ContextType: ExchangeContext](
                 default_exchange_move.minimum_count,
             )
 
-    def create_context(self, atoms: Atoms, rng: RNG) -> ExchangeContext:
+    def create_context(self, atoms: Atoms, rng: RNG) -> ContextType:
         """
         Create the context for the Monte Carlo simulation.
 
@@ -195,7 +131,7 @@ class GrandCanonical[MoveType: DisplacementMove, ContextType: ExchangeContext](
         ExchangeContext
             The context for the Monte Carlo simulation.
         """
-        return ExchangeContext(atoms, rng, self.moves)
+        return cast(ContextType, ExchangeContext(atoms, rng))
 
     @property
     def chemical_potential(self) -> float:
@@ -222,7 +158,7 @@ class GrandCanonical[MoveType: DisplacementMove, ContextType: ExchangeContext](
         self.context.chemical_potential = chemical_potential
 
     @property
-    def number_of_particles(self) -> int:
+    def number_of_exchange_particles(self) -> int:
         """
         The number of particles in the simulation.
 
@@ -231,10 +167,10 @@ class GrandCanonical[MoveType: DisplacementMove, ContextType: ExchangeContext](
         int
             The number of particles.
         """
-        return self.context.number_of_particles
+        return self.context.number_of_exchange_particles
 
-    @number_of_particles.setter
-    def number_of_particles(self, number_of_particles: int) -> None:
+    @number_of_exchange_particles.setter
+    def number_of_exchange_particles(self, number_of_exchange_particles: int) -> None:
         """
         Set the number of particles in the simulation.
 
@@ -243,4 +179,43 @@ class GrandCanonical[MoveType: DisplacementMove, ContextType: ExchangeContext](
         number_of_particles : int
             The number of particles.
         """
-        self.context.number_of_particles = number_of_particles
+        self.context.number_of_exchange_particles = number_of_exchange_particles
+
+    def save_state(self) -> None:
+        """
+        Save the current state of the context and update move labels.
+
+        Raises
+        ------
+        ValueError
+            If the labels are not updated correctly.
+        """
+        for move_storage in self.moves.values():
+            move_storage.move.update(
+                self.context.added_indices, self.context.deleted_indices
+            )
+
+        self.number_of_particles += self.context.particle_delta
+
+        super().save_state()
+
+    def revert_state(self) -> None:
+        """
+        Revert the last move made by the context.
+
+        Raises
+        ------
+        ValueError
+            If the last deleted atoms are not saved.
+        """
+        if len(self.context.added_indices) != 0:
+            del self.atoms[self.context.added_indices]
+        if len(self.context.deleted_indices) != 0:
+            if len(self.context.deleted_atoms) == 0:
+                raise ValueError("Last deleted atoms not saved.")
+
+            reinsert_atoms(
+                self.atoms, self.context.deleted_atoms, self.context.deleted_indices
+            )
+
+        super().revert_state()

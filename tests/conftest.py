@@ -58,3 +58,17 @@ def empty_atoms_fixture():
 @pytest.fixture(name="rng")
 def rng_fixture():
     return np.random.default_rng()
+
+
+@pytest.fixture(name="dummy_calc")
+def dummy_calc():
+    class DummyCalculator:
+        def __init__(self):
+            self.dummy_value = -1.0
+            self.results = {"energy": self.dummy_value}
+
+        def get_potential_energy(self, *_args, **_kwargs):
+            self.results["energy"] = self.dummy_value
+            return self.dummy_value
+
+    return DummyCalculator()
