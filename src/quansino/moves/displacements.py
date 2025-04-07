@@ -81,7 +81,7 @@ class DisplacementMove[
         self.set_labels(moving_labels)
 
         if operation is None:
-            operation = cast(OperationType, Box(0.1))
+            operation = cast("OperationType", Box(0.1))
 
         super().__init__(operation, apply_constraints)
 

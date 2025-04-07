@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal, cast
 
 import numpy as np
-from ase.atoms import Atoms
 from ase.build import molecule
 
 from quansino.mc.contexts import ExchangeContext
@@ -13,6 +12,8 @@ from quansino.moves.displacements import DisplacementMove
 from quansino.moves.operations import Translation, TranslationRotation
 
 if TYPE_CHECKING:
+    from ase.atoms import Atoms
+
     from quansino.moves.operations import CompositeOperation, Operation
     from quansino.type_hints import IntegerArray
 
@@ -68,7 +69,7 @@ class ExchangeMove[
         if isinstance(exchange_atoms, str):
             exchange_atoms = molecule(exchange_atoms)
 
-        self.exchange_atoms = cast(Atoms, exchange_atoms)
+        self.exchange_atoms = cast("Atoms", exchange_atoms)
 
         self.bias_towards_insert = bias_towards_insert
 
@@ -77,9 +78,9 @@ class ExchangeMove[
 
         if operation is None:
             if len(exchange_atoms) > 1:
-                default_operation = cast(OperationType, TranslationRotation())
+                default_operation = cast("OperationType", TranslationRotation())
             else:
-                default_operation = cast(OperationType, Translation())
+                default_operation = cast("OperationType", Translation())
 
             operation = default_operation
 
