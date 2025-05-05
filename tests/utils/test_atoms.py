@@ -48,7 +48,7 @@ def test_search_molecules(bulk_large, rng):
 
     choices = ["H2", "H2O", "CH4"]
 
-    counts = {choice: 0 for choice in choices}
+    counts = dict.fromkeys(choices, 0)
 
     X, Y, Z = np.meshgrid(
         np.arange(0, 100, 10), np.arange(0, 100, 10), np.arange(0, 100, 10)
