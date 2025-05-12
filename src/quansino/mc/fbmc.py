@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from ase.atoms import Atoms
     from numpy.typing import NDArray
 
-    from quansino.type_hints import Displacement, Forces, Masses
+    from quansino.type_hints import Displacement, Forces, Masses, ShapedMasses
 
 
 class ForceBias(MonteCarlo):
@@ -44,6 +44,12 @@ class ForceBias(MonteCarlo):
         Delta parameter in Angstrom which influence how much the atoms are moved.
     temperature: float
         The temperature of the simulation in Kelvin.
+    masses_scaling_power: NDArray
+        Power to which the mass ratio is raised to scale the displacement.
+    mass_scaling: NDArray
+        Scaling factors for the atomic displacements based on masses.
+    shaped_masses: NDArray
+        Masses of the atoms shaped for vectorized calculations.
     """
 
     gamma_max_value = 709.782712
@@ -64,7 +70,7 @@ class ForceBias(MonteCarlo):
 
         if not has_constraint(self.atoms, "FixCom"):
             warn(
-                "No `FixCom` constraint found, `ForceBias` simulations lead to sustained drift of the center of mass.",
+                "No `FixCom` constraint found, `ForceBias` simulations can lead to sustained drift of the center of mass.",
                 stacklevel=2,
             )
 
@@ -79,7 +85,7 @@ class ForceBias(MonteCarlo):
 
         self.current_size = self.size
 
-    def calculate_gamma(self, forces: NDArray[np.floating]) -> None:
+    def calculate_gamma(self, forces: Forces) -> None:
         """
         Calculate the gamma parameter for the Monte Carlo step, along with the denominator for the trial probability.
 
@@ -110,8 +116,22 @@ class ForceBias(MonteCarlo):
         return dictionary
 
     def set_masses_scaling_power(
-        self, value: dict[str, float] | NDArray | float
+        self, value: dict[str, float] | ShapedMasses | float
     ) -> None:
+        """
+        Set the power to which the mass ratio is raised to scale the displacement.
+
+        Parameters
+        ----------
+        value : dict[str, float] | NDArray | float
+            The power value(s). If a dict, keys are element symbols and values are the powers.
+            If an NDArray, it must have shape (n_atoms, 3). If a float, the same value is used for all atoms.
+
+        Raises
+        ------
+        ValueError
+            If the value has an invalid type or if an NDArray with incorrect shape is provided.
+        """
         if isinstance(value, dict):
             self.masses_scaling_power = np.full(self.size, 0.25)
 
@@ -135,7 +155,15 @@ class ForceBias(MonteCarlo):
             np.min(self.shaped_masses) / self.shaped_masses, self.masses_scaling_power
         )
 
-    def update_masses(self, masses: Masses | None = None) -> None:
+    def update_masses(self, masses: ShapedMasses | Masses | None = None) -> None:
+        """
+        Update the masses used for displacement scaling.
+
+        Parameters
+        ----------
+        masses : Masses | None, optional
+            The masses to use. If None, uses the masses from the atoms object.
+        """
         if masses is None:
             masses = self.atoms.get_masses()
 
@@ -144,7 +172,7 @@ class ForceBias(MonteCarlo):
 
         self.shaped_masses = masses
 
-    def step(self) -> Forces:  # type: ignore
+    def step(self) -> Forces:
         """Perform one Force Bias Monte Carlo step."""
         forces = self.atoms.get_forces()
         positions = self.atoms.get_positions()
@@ -182,18 +210,18 @@ class ForceBias(MonteCarlo):
         Returns
         -------
         Displacement
-            The zeta parameter.
+            The zeta parameter with values uniformly distributed between -1 and 1.
         """
         return self._rng.uniform(-1, 1, self.current_size)
 
     def calculate_trial_probability(self) -> NDArray:
         """
-        Calculate the trial probability for the Monte Carlo step.
+        Calculate the trial probability for the Monte Carlo step based on the force bias.
 
         Returns
         -------
-        NDArray[np.floating]
-            The trial probability.
+        NDArray
+            The trial probability for each atom and direction.
         """
         sign_zeta = np.sign(self.zeta)
 

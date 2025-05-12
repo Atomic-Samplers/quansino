@@ -9,6 +9,9 @@ from ase.build import bulk
 from ase.calculators.eam import EAM
 from ase.calculators.emt import EMT
 
+from quansino.mc.criteria import Criteria
+from quansino.operations.core import Operation
+
 
 @pytest.fixture(name="eam_calc")
 def eam_calc_fixture():
@@ -60,15 +63,30 @@ def rng_fixture():
     return np.random.default_rng()
 
 
-@pytest.fixture(name="dummy_calc")
-def dummy_calc():
-    class DummyCalculator:
-        def __init__(self):
-            self.dummy_value = -1.0
-            self.results = {"energy": self.dummy_value}
+class DummyOperation(Operation):
 
-        def get_potential_energy(self, *_args, **_kwargs):
-            self.results["energy"] = self.dummy_value
-            return self.dummy_value
+    def calculate(self, context):
+        context.atoms.set_positions(np.zeros((len(context.atoms), 3)))
 
-    return DummyCalculator()
+
+class DummyCalculator:
+    def __init__(self):
+        self.dummy_value = -1.0
+        self.results = {"energy": self.dummy_value}
+
+    def get_potential_energy(self, *_args, **_kwargs):
+        self.results["energy"] = self.dummy_value
+        return self.dummy_value
+
+
+class DummyCriteria(Criteria):
+    @staticmethod
+    def evaluate():
+        return True
+
+
+class DummySimulation:
+    def __init__(self, atoms, context, moves):
+        self.atoms = atoms
+        self.context = context
+        self.moves = moves

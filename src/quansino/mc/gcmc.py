@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, ClassVar
+from warnings import warn
 
 from quansino.mc.canonical import Canonical
 from quansino.mc.contexts import ExchangeContext
-from quansino.mc.core import MoveStorage
 from quansino.mc.criteria import CanonicalCriteria, GrandCanonicalCriteria
-from quansino.moves.displacements import DisplacementMove
+from quansino.moves.displacement import DisplacementMove
 from quansino.moves.exchange import ExchangeMove
 from quansino.moves.protocol import ExchangeProtocol
 from quansino.utils.atoms import reinsert_atoms
 
 if TYPE_CHECKING:
     from ase.atoms import Atoms
-    from numpy.random import Generator as RNG
+
+    from quansino.mc.core import MoveStorage
 
 
 class GrandCanonical[MoveProtocol: ExchangeProtocol, ContextType: ExchangeContext](
@@ -31,26 +32,24 @@ class GrandCanonical[MoveProtocol: ExchangeProtocol, ContextType: ExchangeContex
     temperature : float
         The temperature of the simulation in Kelvin.
     chemical_potential : float
-        The chemical potential of the system.
-    number_of_particles : int
-        The number of particles in the simulation.
-    num_cycles : int
+        The chemical potential of the system in eV.
+    number_of_exchange_particles : int
+        The number of particles that can be exchanged in the simulation.
+    max_cycles : int
         The number of Monte Carlo cycles.
-    default_displacement_move : DisplacementMove, optional
+    default_displacement_move : MoveProtocol, optional
         The default displacement move.
-    default_exchange_move : MoveStorage[MoveProtocol, ContextType] | MoveProtocol, optional
+    default_exchange_move : MoveStorage[MoveProtocol] | MoveProtocol, optional
         The default exchange move.
     **mc_kwargs
         Additional keyword arguments for the Monte Carlo simulation.
 
     Attributes
     ----------
-    acceptable_moves : ClassVar[dict[MoveProtocol, AcceptanceCriteria]]
-        A dictionary mapping move types to their acceptance criteria.
-    context : ExchangeContext
-        The context of the Monte Carlo simulation.
-    number_of_particles : int
-        The number of particles in the simulation.
+    chemical_potential : float
+        The chemical potential of the simulation in eV.
+    number_of_exchange_particles : int
+        The number of particles that can be exchanged in the simulation.
     """
 
     default_criteria: ClassVar = {
@@ -62,76 +61,28 @@ class GrandCanonical[MoveProtocol: ExchangeProtocol, ContextType: ExchangeContex
     def __init__(
         self,
         atoms: Atoms,
-        temperature: float,
-        chemical_potential: float,
-        number_of_exchange_particles: int,
-        num_cycles: int,
+        temperature: float = 298.15,
+        chemical_potential: float = 0.0,
+        number_of_exchange_particles: int = 0,
+        max_cycles: int | None = None,
         default_displacement_move: MoveProtocol | None = None,
         default_exchange_move: MoveStorage[MoveProtocol] | MoveProtocol | None = None,
         **mc_kwargs,
     ) -> None:
-        """
-        Initialize the Grand Canonical Monte Carlo object.
-
-        Parameters
-        ----------
-        atoms : Atoms
-            The atomic configuration.
-        temperature : float
-            The temperature of the simulation in Kelvin.
-        chemical_potential : float
-            The chemical potential of the system.
-        number_of_particles : int
-            The number of particles in the simulation.
-        num_cycles : int
-            The number of Monte Carlo cycles.
-        default_displacement_move : DisplacementMove, optional
-            The default displacement move.
-        default_exchange_move : MoveStorage[MoveProtocol, ContextType] | MoveProtocol, optional
-            The default exchange move.
-        **mc_kwargs
-            Additional keyword arguments for the Monte Carlo simulation.
-        """
+        """Initialize the Grand Canonical Monte Carlo object."""
         super().__init__(
             atoms,
             temperature=temperature,
-            num_cycles=num_cycles,
-            default_move=default_displacement_move,
+            max_cycles=max_cycles,
+            default_displacement_move=default_displacement_move,
             **mc_kwargs,
         )
 
-        self.context.chemical_potential = chemical_potential
+        self.chemical_potential = chemical_potential
         self.number_of_exchange_particles = number_of_exchange_particles
 
-        if isinstance(default_exchange_move, DisplacementMove):
-            self.add_move(default_exchange_move, name="default_exchange")
-        elif isinstance(default_exchange_move, MoveStorage):
-            self.add_move(
-                default_exchange_move.move,
-                default_exchange_move.criteria,
-                "default_exchange",
-                default_exchange_move.interval,
-                default_exchange_move.probability,
-                default_exchange_move.minimum_count,
-            )
-
-    def create_context(self, atoms: Atoms, rng: RNG) -> ContextType:
-        """
-        Create the context for the Monte Carlo simulation.
-
-        Parameters
-        ----------
-        atoms : Atoms
-            The atomic configuration.
-        rng : RNG
-            The random number generator.
-
-        Returns
-        -------
-        ExchangeContext
-            The context for the Monte Carlo simulation.
-        """
-        return cast(ContextType, ExchangeContext(atoms, rng))
+        if default_exchange_move:
+            self.add_move(default_exchange_move, name="default_exchange_move")
 
     @property
     def chemical_potential(self) -> float:
@@ -160,7 +111,7 @@ class GrandCanonical[MoveProtocol: ExchangeProtocol, ContextType: ExchangeContex
     @property
     def number_of_exchange_particles(self) -> int:
         """
-        The number of particles in the simulation.
+        The number of particles that can be exchanged in the simulation.
 
         Returns
         -------
@@ -172,11 +123,11 @@ class GrandCanonical[MoveProtocol: ExchangeProtocol, ContextType: ExchangeContex
     @number_of_exchange_particles.setter
     def number_of_exchange_particles(self, number_of_exchange_particles: int) -> None:
         """
-        Set the number of particles in the simulation.
+        Set the number of particles that can be exchanged in the simulation.
 
         Parameters
         ----------
-        number_of_particles : int
+        number_of_exchange_particles : int
             The number of particles.
         """
         self.context.number_of_exchange_particles = number_of_exchange_particles
@@ -194,8 +145,6 @@ class GrandCanonical[MoveProtocol: ExchangeProtocol, ContextType: ExchangeContex
             move_storage.move.update(
                 self.context.added_indices, self.context.deleted_indices
             )
-
-        self.number_of_particles += self.context.particle_delta
 
         super().save_state()
 
@@ -218,4 +167,10 @@ class GrandCanonical[MoveProtocol: ExchangeProtocol, ContextType: ExchangeContex
                 self.atoms, self.context.deleted_atoms, self.context.deleted_indices
             )
 
-        super().revert_state()
+        self.atoms.positions = self.context.last_positions.copy()
+
+        try:
+            self.atoms.calc.atoms = self.atoms.copy()  # type: ignore
+            self.atoms.calc.results = self.last_results.copy()  # type: ignore
+        except AttributeError:
+            warn("Atoms object does not have calculator attached.", stacklevel=2)

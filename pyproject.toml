@@ -45,7 +45,7 @@ changelog = "https://github.com/Atomic-Samplers/quansino/blob/main/CHANGELOG.md"
 quansino = ["py.typed"]
 
 [tool.pyright]
-include = ["src"]
+include = ["quansino"]
 exclude = ["**/__pycache__"]
 
 [tool.pytest.ini_options]
@@ -121,10 +121,10 @@ lint.select = [
 ]
 lint.ignore = [
   "E501",   # Line too long
+  "A005",  # Unused built-in
   "ISC001",   # single-line-implicit-string-concatenation
   "PERF203",  # try-except-in-loop
   "PLR",    # Design related pylint codes
-  "PT004",  # Fixture does not return anything
   "PT011",  # pytest.raises
   "PT012",  # pytest.raises
   "RET505", # Unnecessary `elif` after `return`

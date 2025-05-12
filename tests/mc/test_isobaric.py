@@ -1,0 +1,114 @@
+from __future__ import annotations
+
+import numpy as np
+from ase.calculators.calculator import compare_atoms
+from ase.units import bar
+from numpy.testing import assert_allclose, assert_array_equal
+from tests.conftest import DummyCalculator
+
+from quansino.mc.contexts import StrainContext
+from quansino.mc.criteria import Criteria
+from quansino.mc.isobaric import Isobaric
+from quansino.moves import CellMove, DisplacementMove
+from quansino.operations.cell import IsotropicVolume
+from quansino.operations.displacement import Ball
+
+
+def test_isobaric(bulk_small, rng, tmp_path):
+    """Test the Isobaric class."""
+    # Create an instance of the Isobaric class
+    mc = Isobaric(
+        bulk_small,
+        temperature=0.1,
+        pressure=1.0 * bar,
+        max_cycles=10,
+        default_displacement_move=DisplacementMove([0, 1, 2, 3], Ball(0.1), rng),
+        default_cell_move=CellMove(IsotropicVolume(0.05), rng),
+        logfile=tmp_path / "mc.log",
+        trajectory=tmp_path / "mc.traj",
+    )
+
+    class DummyCriteria(Criteria):
+        def evaluate(self, context: StrainContext) -> bool:
+            return context.rng.random() < 0.5
+
+    mc.moves["default_displacement_move"].criteria = DummyCriteria()
+    mc.moves["default_cell_move"].criteria = DummyCriteria()
+
+    assert mc.atoms == bulk_small
+    assert mc.temperature == 0.1
+    assert mc.pressure == 1.0 * bar
+    assert mc.max_cycles == 10
+
+    assert isinstance(mc.context, StrainContext)
+
+    assert isinstance(mc.moves["default_displacement_move"].move.operation, Ball)
+    assert isinstance(mc.moves["default_cell_move"].move.operation, IsotropicVolume)
+
+    assert mc.moves["default_cell_move"].probability == 1 / (len(bulk_small) + 1)
+    assert mc.moves["default_displacement_move"].probability == 1 / (
+        1 + 1 / len(bulk_small)
+    )
+
+    assert_allclose(mc.context.last_cell, bulk_small.cell)
+    assert_allclose(mc.context.last_positions, bulk_small.get_positions())
+    assert np.isnan(mc.context.last_energy)
+    assert mc.last_results == {}
+
+    old_cell = mc.atoms.cell.copy()
+    old_positions = mc.atoms.get_positions().copy()
+
+    mc.step()
+
+    assert mc.atoms.calc is not None
+
+    if "default_cell_move" in mc.accepted_moves:
+        assert not np.allclose(mc.context.last_cell, old_cell)
+        assert not np.allclose(mc.atoms.cell, old_cell)
+        assert not np.allclose(mc.context.last_positions, old_positions)
+        assert not np.allclose(mc.atoms.get_positions(), old_positions)
+    else:
+        assert_allclose(mc.context.last_cell, old_cell)
+        assert_allclose(mc.atoms.cell, old_cell)
+
+    if "default_displacement_move" in mc.accepted_moves:
+        assert not np.allclose(mc.context.last_positions, old_positions)
+        assert not np.allclose(mc.atoms.get_positions(), old_positions)
+    else:
+        assert_allclose(mc.context.last_positions, old_positions)
+        assert_allclose(mc.atoms.get_positions(), old_positions)
+
+    assert_allclose(mc.context.last_positions, mc.atoms.get_positions())
+    assert_allclose(mc.context.last_cell, mc.atoms.cell)
+
+    acceptances = []
+
+    for _ in mc.irun(100):
+        assert mc.atoms.calc is not None
+
+        if mc.acceptance_rate:
+            assert_allclose(mc.context.last_positions, mc.atoms.get_positions())
+            assert_allclose(mc.context.last_cell, mc.atoms.cell)
+        else:
+            assert mc.atoms.calc.results.keys() == mc.last_results.keys()
+            assert all(
+                np.allclose(mc.last_results[k], mc.atoms.calc.results[k])
+                for k in mc.last_results
+                if isinstance(mc.last_results[k], str | float | int)
+            )
+
+        assert not compare_atoms(mc.atoms.calc.atoms, mc.atoms)
+        assert_allclose(mc.context.last_positions, mc.atoms.get_positions())
+
+        acceptances.append(mc.acceptance_rate)
+
+    acceptance_from_log = np.loadtxt(tmp_path / "mc.log", skiprows=1, usecols=-1)
+
+    assert_array_equal(acceptances, acceptance_from_log)
+    assert_allclose(np.sum(acceptances), 50, atol=20)
+
+    mc.atoms.calc = DummyCalculator()
+
+    mc.revert_state()
+    del mc.atoms.calc.results
+    mc.save_state()

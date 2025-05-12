@@ -7,7 +7,7 @@ from ase.calculators.calculator import Calculator
 
 from quansino.mc.core import MonteCarlo
 from quansino.mc.criteria import Criteria
-from quansino.moves.displacements import DisplacementMove
+from quansino.moves.displacement import DisplacementMove
 
 
 def test_mc_class(bulk_small):
@@ -81,7 +81,7 @@ def test_mc_yield_moves(bulk_small):
 
     assert list(mc.yield_moves()) == []
 
-    mc.num_cycles = 100
+    mc.max_cycles = 100
 
     for i in range(20):
         mc.add_move(

@@ -1,13 +1,14 @@
-"""Module for Monte Carlo contexts"""
+"""Module for Monte Carlo contexts."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from ase.atoms import Atoms
 
 if TYPE_CHECKING:
+    from ase.cell import Cell
     from numpy.random import Generator
 
     from quansino.type_hints import IntegerArray, Positions
@@ -15,7 +16,14 @@ if TYPE_CHECKING:
 
 class Context:
     """
-    Base abstract class for Monte Carlo contexts. Context defines the interface between the simulation object, the moves and their criteria. The context object aim to provide the necessary information for the move to perform its operation, without having to pass whole objects around. Classes inheriting from [`Context`][quansino.mc.contexts.Context] should define a `save_state()` and `revert_state()` method that saves and reverts the state of the simulation after a move, respectively. Specific context might be required for different types of moves, for example, [`DisplacementContext`][quansino.mc.contexts.DisplacementContext] for displacement moves and [`ExchangeContext`][quansino.mc.contexts.ExchangeContext] for exchange moves. This class is not meant to be instantiated, and represent the bare minimum that a context object should implement.
+    Base class for Monte Carlo contexts. Contexts define the interface between the simulation object, the moves and their criteria. They aim to provide the necessary information for the move to perform its operation, without having to pass whole simulation objects around. Typically, the context should contain all the information required to restart the information, not more, not less. Specific context might be required for different types of moves, for example, [`DisplacementContext`][quansino.mc.contexts.DisplacementContext] for displacement moves and [`ExchangeContext`][quansino.mc.contexts.ExchangeContext] for exchange moves.
+
+    Parameters
+    ----------
+    atoms : Atoms
+        The atoms object to perform the simulation on.
+    rng : Generator
+        The random number generator to use.
 
     Attributes
     ----------
@@ -23,18 +31,22 @@ class Context:
         The atoms object to perform the simulation on.
     rng : Generator
         The random number generator to use.
-
-    Methods
-    -------
-    save_state()
-        Save the current state of the context.
-    revert_state()
-        Revert to the previously saved state.
     """
 
     def __init__(self, atoms: Atoms, rng: Generator) -> None:
         self.atoms: Atoms = atoms
         self.rng: Generator = rng
+
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert the context to a dictionary.
+
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary representation of the context.
+        """
+        return {}
 
 
 class DisplacementContext(Context):
@@ -51,15 +63,15 @@ class DisplacementContext(Context):
     Attributes
     ----------
     atoms : Atoms
-        The atoms object to perform the simulation on. Used in the simulation and moves.
+        The atoms object to perform the simulation on. Used in the simulation, and moves.
     rng : Generator
-        The random number generator to use. Used in the criteria and moves.
-    last_positions : Positions
-        The positions of the atoms in the last saved state. Used in the simulation.
-    last_results : dict[str, Any]
-        The results of the ASE calculator in the last saved state. Used in the simulation.
+        The random number generator to use. Used in the simulation, criteria, and moves.
     temperature : float
         The temperature of the simulation in Kelvin. Used in the criteria.
+    last_positions : Positions
+        The positions of the atoms in the last saved state. Used in the simulation.
+    last_energy : float
+        The energy value from the last saved state. Used in the simulation.
     moving_indices : IntegerArray
         Integer indices of atoms that are being displaced. Used in moves.
 
@@ -93,6 +105,22 @@ class DisplacementContext(Context):
         """Reset the context by setting `moving_indices` to an empty list."""
         self.moving_indices: IntegerArray = []
 
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert the context to a dictionary.
+
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary representation of the context.
+        """
+        return {
+            "temperature": self.temperature,
+            "last_positions": self.last_positions,
+            "last_energy": self.last_energy,
+            "moving_indices": self.moving_indices,
+        }
+
 
 class StrainContext(DisplacementContext):
     """
@@ -110,9 +138,11 @@ class StrainContext(DisplacementContext):
     atoms : Atoms
         The atoms object to perform the simulation on. Used in the simulation and moves.
     rng : Generator
-        The random number generator to use. Used in the criteria and moves.
-    number_of_particles : int
-        The number of particles in the system. Used in the criteria. By default equal to the number of atoms in the simulation.
+        The random number generator to use. Used in the simulation, criteria, and moves.
+    pressure : float
+        The pressure of the system. Used in the criteria.
+    last_cell : Cell
+        The cell of the atoms in the last saved state. Used in the simulation.
     """
 
     def __init__(self, atoms: Atoms, rng: Generator) -> None:
@@ -128,8 +158,15 @@ class StrainContext(DisplacementContext):
         """
         super().__init__(atoms, rng)
 
-        self.pressure: float = np.nan
-        self.last_cell = atoms.get_cell()
+        self.pressure = np.nan
+        self.last_cell: Cell = atoms.get_cell()
+
+    def to_dict(self):
+        return {
+            **super().to_dict(),
+            "pressure": self.pressure,
+            "last_cell": self.last_cell,
+        }
 
 
 class ExchangeContext(DisplacementContext):
@@ -148,11 +185,13 @@ class ExchangeContext(DisplacementContext):
     atoms : Atoms
         The atoms object to perform the simulation on. Used in the simulation and moves.
     rng : Generator
-        The random number generator to use. Used in the criteria and moves.
+        The random number generator to use. Used in the simulation, criteria, and moves.
     chemical_potential : float
         The chemical potential of the system. Used in the criteria.
-    number_of_particles : int
-        The number of particles in the system. Used in the criteria.
+    number_of_exchange_particles : int
+        The number of particles that can be exchanged. Used in the criteria.
+    accessible_volume : float
+        The accessible volume of the system. Used in the criteria.
     added_indices : IntegerArray
         Integer indices of atoms that were added in the last move. Used in the moves.
     added_atoms : Atoms
@@ -161,15 +200,11 @@ class ExchangeContext(DisplacementContext):
         Integer indices of atoms that were deleted in the last move. Used in the moves.
     deleted_atoms : Atoms
         Atoms that were deleted in the last move. Used in the criteria and moves.
-    accessible_volume : float
-        The accessible volume of the system. Used in the criteria.
-    particle_delta : int
-        The change in the number of particles in the system. Used in the criteria and moves.
 
     Methods
     -------
-    save_state()
-        Save the current state of the context and update move labels.
+    reset()
+        Reset the context by setting all exchange-related attributes to their default values.
     """
 
     def __init__(self, atoms: Atoms, rng: Generator) -> None:
@@ -182,15 +217,15 @@ class ExchangeContext(DisplacementContext):
             The atoms object to perform the simulation on.
         rng : Generator
             The random number generator to use.
-        moves : dict[str, MoveStorage]
-            Dictionary of displacement moves to update labels when atoms are added or removed.
         """
         super().__init__(atoms, rng)
 
-        self.chemical_potential: float = np.nan
-        self.number_of_exchange_particles: int = 0
+        self.chemical_potential = np.nan
 
-        self.accessible_volume: float = self.atoms.cell.volume
+        self.number_of_exchange_particles = 0
+        self.accessible_volume = self.atoms.cell.volume
+
+        self.default_label: int | None = None
 
         self.reset()
 
@@ -201,4 +236,22 @@ class ExchangeContext(DisplacementContext):
         self.deleted_indices: IntegerArray = []
         self.deleted_atoms: Atoms = Atoms()
 
-        self.particle_delta: int = 0
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert the context to a dictionary.
+
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary representation of the context.
+        """
+        return {
+            **super().to_dict(),
+            "chemical_potential": self.chemical_potential,
+            "number_of_exchange_particles": self.number_of_exchange_particles,
+            "accessible_volume": self.accessible_volume,
+            "added_indices": self.added_indices,
+            "added_atoms": self.added_atoms,
+            "deleted_indices": self.deleted_indices,
+            "deleted_atoms": self.deleted_atoms,
+        }

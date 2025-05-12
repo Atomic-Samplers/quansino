@@ -32,7 +32,9 @@ Cell = ndarray[tuple[3, 3], dtype[floating]]
 Connectivity = ndarray[tuple[int, int], dtype[integer]]
 """Type hint for an array of integer pairs representing atom connectivity."""
 
-Displacement = ndarray[tuple[3], dtype[floating]]
+Displacement = (
+    ndarray[tuple[3], dtype[floating]] | ndarray[tuple[1, 3], dtype[floating]]
+)
 """Type hint for a 3D displacement vector."""
 
 Center = list[float] | tuple[float] | ndarray[tuple[3], dtype[floating]]
@@ -56,5 +58,7 @@ Momenta = ndarray[tuple[int, 3], dtype[floating]]
 Velocities = ndarray[tuple[int, 3], dtype[floating]]
 """Type hint for an array of 3D velocities."""
 
-Masses = ndarray[tuple[int], dtype[floating]] | ndarray[tuple[int, 3], dtype[floating]]
+Masses = ndarray[tuple[int], dtype[floating]]
 """Type hint for an array of masses."""
+
+ShapedMasses = ndarray[tuple[int, 3], dtype[floating]]
