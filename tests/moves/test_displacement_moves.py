@@ -93,10 +93,10 @@ def test_displacement_move_2(bulk_small, rng):
     move.context.atoms.set_constraint(FixAtoms([0, 1, 2, 3]))
 
     random_int = rng.integers(0, len(bulk_small))
-    exchangeable_labels = [-1, -1, -1, -1]
-    exchangeable_labels[random_int] = 0
+    labels = [-1, -1, -1, -1]
+    labels[random_int] = 0
 
-    move.labels = exchangeable_labels
+    move.labels = labels
 
     assert move()
 

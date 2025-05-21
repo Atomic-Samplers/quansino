@@ -16,12 +16,14 @@ if TYPE_CHECKING:
 
 
 def has_constraint(atoms: Atoms, constraint_type: type[FixConstraint] | str) -> bool:
-    """Check if the Atoms object has constraints.
+    """Check if the Atoms object has the specified constraint.
 
     Parameters
     ----------
     atoms
         The Atoms object to check.
+    constraint_type
+        The constraint type to check.
 
     Returns
     -------

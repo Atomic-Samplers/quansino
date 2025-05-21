@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import atexit
-import sys
 from contextlib import ExitStack, suppress
-from pathlib import Path
-from typing import IO, Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class FileManager:
@@ -45,40 +46,14 @@ class FileManager:
         """Exit the context manager and close all files"""
         self.close()
 
-    def register(self, resource: Any) -> Any:
+    __del__ = __exit__
+
+    def register(self, resource: Callable[[], None]) -> Any:
         """Register a resource for automatic cleanup"""
-        return self.exitstack.enter_context(resource)
-
-    def open_file(
-        self, file: str | Path | None, mode: str = "w", encoding: str | None = None
-    ) -> IO[Any]:
-        """Open a file and register it for automatic cleanup
-
-        Parameters
-        ----------
-        file : str | Path | None
-            The file to open. If None, `/dev/null` is used.
-        mode : str
-            The mode in which to open the file. Defaults to 'w'.
-        encoding : str | None
-            The encoding to use for the file. Defaults to 'utf-8' if not specified.
-
-        Returns
-        -------
-        IO[Any]
-            The opened file object.
-        """
-        if file == "-":
-            return sys.stdout if "w" in mode else sys.stdin
-
-        if file is None:
-            return self.register(Path("/dev/null").open(mode=mode, encoding=encoding))
-
-        path = Path(file)
-        encoding = encoding or ("utf-8" if "b" not in mode else None)
-        return self.register(path.open(mode=mode, encoding=encoding))
+        return self.exitstack.callback(resource)
 
     def close(self) -> None:
         """Close all registered resources"""
-        with suppress(Exception):
+        with suppress(OSError, AttributeError, ValueError):
             self.exitstack.close()
+            atexit.unregister(self.close)

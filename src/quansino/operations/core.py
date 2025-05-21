@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
+from warnings import warn
 
 import numpy as np
+
+from quansino.registry import get_typed_class
 
 if TYPE_CHECKING:
     from quansino.mc.contexts import Context
@@ -94,10 +97,8 @@ class Operation(ABC):
         """
         return {"name": self.__class__.__name__}
 
-    @staticmethod
-    def from_dict(
-        data: dict[str, Any], operations_registry: None | dict[str, Any] = None
-    ) -> Operation:
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
         """
         Create an operation from a dictionary.
 
@@ -111,10 +112,13 @@ class Operation(ABC):
         Operation
             The operation object created from the dictionary.
         """
-        if operations_registry is None:
-            from quansino.operations import operations_registry
+        kwargs = data.get("kwargs", {})
+        instance = cls(**kwargs)
 
-        return operations_registry[data["name"]](**data.get("kwargs", {}))
+        for key, value in data.get("attributes", {}).items():
+            setattr(instance, key, value)
+
+        return instance
 
 
 class CompositeOperation(Operation):
@@ -143,6 +147,13 @@ class CompositeOperation(Operation):
 
     def __init__(self, operations: list[Operation]) -> None:
         """Initialize the CompositeOperation object."""
+        if len(operations) == 0:
+            warn(
+                f"No operations provided. The {self.__class__.__name__} will not perform any calculations.",
+                UserWarning,
+                2,
+            )
+
         self.operations = operations
 
     def calculate(self, context: Context) -> Any:
@@ -161,7 +172,7 @@ class CompositeOperation(Operation):
         """
         return np.sum([op.calculate(context) for op in self.operations], axis=0)
 
-    def __add__(self, other: Operation) -> CompositeOperation:
+    def __add__(self, other: Operation) -> Self:
         """
         Combine two operations into a single operation.
 
@@ -172,19 +183,19 @@ class CompositeOperation(Operation):
 
         Returns
         -------
-        CompositeOperation
-            The combined operation.
+        Self
+            The combined operation of the same type as the caller.
 
         Notes
         -----
         Works with both single operations and composite operations. If the other operation is a composite operation, the operations are combined into a single composite operation.
         """
         if isinstance(other, CompositeOperation):
-            return CompositeOperation(self.operations + other.operations)
+            return type(self)(self.operations + other.operations)
         else:
-            return CompositeOperation([*self.operations, other])
+            return type(self)([*self.operations, other])
 
-    def __mul__(self, n: int) -> CompositeOperation:
+    def __mul__(self, n: int) -> Self:
         """
         Multiply the displacement move by an integer to create a composite move.
 
@@ -241,5 +252,36 @@ class CompositeOperation(Operation):
         """
         return {
             "name": self.__class__.__name__,
-            "operations": [operation.to_dict() for operation in self.operations],
+            "kwargs": {
+                "operations": [operation.to_dict() for operation in self.operations]
+            },
         }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """
+        Create a composite operation from a dictionary.
+
+        Parameters
+        ----------
+        data : dict[str, Any]
+            The dictionary representation of the operation.
+
+        Returns
+        -------
+        Self
+            The composite operation object created from the dictionary.
+        """
+        operations = []
+
+        if "operations" in data.get("kwargs", {}):
+            for operation_data in data["operations"]:
+                operation_class: type[Operation] = get_typed_class(
+                    operation_data["name"], Operation
+                )
+                operation = operation_class.from_dict(operation_data)
+                operations.append(operation)
+
+        data.setdefault("kwargs", {})["operations"] = operations
+
+        return super().from_dict(data)

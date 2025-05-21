@@ -1,26 +1,30 @@
 from __future__ import annotations
 
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import IO, TYPE_CHECKING, Any
 
 from ase.io.jsonio import write_json
 
 from quansino.io.core import TextObserver
 
 if TYPE_CHECKING:
+    from pathlib import Path
 
     from quansino.mc.core import Driver
 
 
 class RestartObserver(TextObserver):
+
+    accept_stream: bool = False
+
     def __init__(
         self,
         simulation: Driver,
-        restart_file: str | Path,
+        file: IO | Path | str,
         interval: int = 1,
-        unique: bool = False,
         mode: str = "a",
+        unique: bool = True,
         write_kwargs: dict[str, Any] | None = None,
+        **observer_kwargs: Any,
     ) -> None:
         """
         Initialize the Trajectory observer with a trajectory file, mode, and other parameters.
@@ -38,12 +42,11 @@ class RestartObserver(TextObserver):
         function_kwargs : dict[str, Any] | None
             Additional keyword arguments to pass to the function.
         """
-        super().__init__(filename=restart_file, interval=interval, mode=mode)
+        super().__init__(file=file, interval=interval, mode=mode, **observer_kwargs)
 
         self.simulation = simulation
         self.write_kwargs = write_kwargs or {}
 
-        self.original_path = Path(restart_file)
         self.unique = unique
 
     def __call__(self) -> None:
@@ -58,26 +61,25 @@ class RestartObserver(TextObserver):
             Keyword arguments to pass to the function.
         """
         if self.unique:
-            self.file.seek(0)
-            self.file.truncate()
+            self._file.seek(0)
+            self._file.truncate()
         else:
-            stem, ext = self.original_path.stem, self.original_path.suffix
-            self.filename = f"{stem}_{self.simulation.nsteps}{ext}"
+            self.file = (
+                self.file_path.parent
+                / f"{self.file_path.stem}_{self.simulation.step_count}{self.file_path.suffix}"
+            )
+        write_json(self._file, obj=self.simulation, **self.write_kwargs)
+        self._file.flush()
 
-        write_json(self.file, obj=self.simulation, **self.write_kwargs)
+    @property
+    def unique(self) -> bool:
+        """Check if the file is unique."""
+        return self._unique
 
-    @staticmethod
-    def separate_filename(string: str) -> tuple[str, str]:
-        """
-        Return the stem filename of the trajectory file.
+    @unique.setter
+    def unique(self, value: bool) -> None:
+        """Set the file to be unique."""
+        self._unique = value
 
-        Returns
-        -------
-        str
-            The string without the file extension.
-        """
-        i = string.rfind(".")
-        if 0 < i < len(string) - 1:
-            return (string[:i], string[i + 1 :])
-        else:
-            return (string, "")
+        if not value:
+            self.file_path = self.get_file_path()

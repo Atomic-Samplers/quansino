@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import IO, TYPE_CHECKING, Any
 
 from ase.io.extxyz import write_xyz
 
@@ -13,13 +13,15 @@ from quansino.io.core import TextObserver
 
 
 class TrajectoryObserver(TextObserver):
+
     def __init__(
         self,
         atoms: Atoms,
-        trajectory_file: str | Path,
+        file: IO | Path | str,
         interval: int = 1,
         mode: str = "a",
         write_kwargs: dict[str, Any] | None = None,
+        **observer_kwargs: Any,
     ) -> None:
         """
         Initialize the Trajectory observer with a trajectory file, mode, and other parameters.
@@ -37,8 +39,7 @@ class TrajectoryObserver(TextObserver):
         function_kwargs : dict[str, Any] | None
             Additional keyword arguments to pass to the function.
         """
-
-        super().__init__(filename=trajectory_file, interval=interval, mode=mode)
+        super().__init__(file=file, interval=interval, mode=mode, **observer_kwargs)
 
         self.atoms = atoms
         self.write_kwargs = write_kwargs or {}
@@ -54,4 +55,5 @@ class TrajectoryObserver(TextObserver):
         **kwargs : Any
             Keyword arguments to pass to the function.
         """
-        write_xyz(self.file, images=self.atoms, **self.write_kwargs)
+        write_xyz(self._file, images=self.atoms, **self.write_kwargs)
+        self._file.flush()

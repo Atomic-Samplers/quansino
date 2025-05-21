@@ -39,10 +39,9 @@ def test_canonical(bulk_small, tmp_path):
     data = mc.to_dict()
 
     assert data["name"] == "Canonical"
-    assert data["nsteps"] == 0
-    assert data["max_steps"] == 0
+    assert data["attributes"]["step_count"] == 0
     assert data["context"]["temperature"] == 10.0
-    assert data["seed"] == mc._seed
+    assert data["kwargs"]["seed"] == mc._MonteCarlo__seed  # type: ignore
     assert data["rng_state"] == mc._rng.bit_generator.state
     assert (
         data["moves"]["default_displacement_move"]["move"]["name"] == "DisplacementMove"
@@ -58,8 +57,7 @@ def test_canonical(bulk_small, tmp_path):
     assert mc.moves["default_displacement_move"].interval == 1
     assert mc.moves["default_displacement_move"].minimum_count == 0
     assert_equal(
-        mc.moves["default_displacement_move"].move.moving_labels,
-        np.arange(len(bulk_small)),
+        mc.moves["default_displacement_move"].move.labels, np.arange(len(bulk_small))
     )
     assert isinstance(
         mc.moves["default_displacement_move"].move.context, DisplacementContext
@@ -69,7 +67,8 @@ def test_canonical(bulk_small, tmp_path):
 
     energy = mc.atoms.get_potential_energy()
 
-    mc.step()
+    for _ in mc.step():
+        pass
 
     if mc.acceptance_rate:
         assert not np.allclose(mc.last_results["energy"], energy)
@@ -78,7 +77,7 @@ def test_canonical(bulk_small, tmp_path):
 
     mc.run(10)
 
-    assert mc.nsteps == 10
+    assert mc.step_count == 10
 
     mc.temperature = 300.0
     mc.max_cycles = 1
@@ -89,8 +88,13 @@ def test_canonical(bulk_small, tmp_path):
 
     mc.moves["default_displacement_move"].criteria = DummyCriteria()
 
+    assert mc.default_logger is not None
+
+    mc.default_logger.file.seek(0)
+    mc.default_logger.file.truncate()
+
     acceptances = []
-    for _ in mc.irun(1000):
+    for _ in mc.run_steps(1000):
         assert mc.atoms.calc is not None
         assert not compare_atoms(mc.atoms.calc.atoms, mc.atoms)
 
@@ -106,7 +110,7 @@ def test_canonical(bulk_small, tmp_path):
         assert_allclose(mc.context.last_positions, mc.atoms.get_positions())
         acceptances.append(mc.acceptance_rate)
 
-    acceptance_from_log = np.loadtxt(tmp_path / "mc.log", skiprows=13, usecols=-1)
+    acceptance_from_log = np.loadtxt(tmp_path / "mc.log", skiprows=0, usecols=-1)
 
     assert_array_equal(acceptances, acceptance_from_log)
     assert_allclose(np.sum(acceptances), 500, atol=100)
@@ -132,7 +136,6 @@ def test_canonical(bulk_small, tmp_path):
     mc.atoms.calc = DummyCalculator()
 
     mc.revert_state()
-    del mc.atoms.calc.results
     mc.save_state()
 
 
@@ -160,7 +163,7 @@ def test_canonical_restart(bulk_small, tmp_path):
     assert reconstructed_mc.atoms == mc.atoms
     assert reconstructed_mc.temperature == mc.temperature
     assert reconstructed_mc.max_cycles == mc.max_cycles
-    assert reconstructed_mc.nsteps == mc.nsteps
+    assert reconstructed_mc.step_count == mc.step_count
 
     assert reconstructed_mc.last_results == mc.last_results
     assert reconstructed_mc.context.last_energy == mc.context.last_energy
@@ -183,8 +186,8 @@ def test_canonical_restart(bulk_small, tmp_path):
         == mc.moves["default_displacement_move"].move.operation.step_size  # type: ignore
     )
     assert_allclose(
-        reconstructed_mc.moves["default_displacement_move"].move.moving_labels,
-        mc.moves["default_displacement_move"].move.moving_labels,
+        reconstructed_mc.moves["default_displacement_move"].move.labels,
+        mc.moves["default_displacement_move"].move.labels,
     )
     assert (
         reconstructed_mc.moves["default_displacement_move"].move.max_attempts
@@ -210,20 +213,15 @@ def test_canonical_restart(bulk_small, tmp_path):
     )
 
     assert mc.default_logger is not None
-    assert reconstructed_mc.default_logger is not None
-    assert reconstructed_mc.default_logger.filename == mc.default_logger.filename
+    assert reconstructed_mc.default_logger is None
 
     assert mc.default_trajectory is not None
-    assert reconstructed_mc.default_trajectory is not None
-    assert (
-        reconstructed_mc.default_trajectory.filename == mc.default_trajectory.filename
-    )
+    assert reconstructed_mc.default_trajectory is None
 
     assert mc.default_restart is not None
-    assert reconstructed_mc.default_restart is not None
-    assert reconstructed_mc.default_restart.filename == mc.default_restart.filename
+    assert reconstructed_mc.default_restart is None
 
-    assert reconstructed_mc._seed == mc._seed
+    assert reconstructed_mc._MonteCarlo__seed == mc._MonteCarlo__seed  # type: ignore
     assert reconstructed_mc._rng.bit_generator.state == mc._rng.bit_generator.state
     assert reconstructed_mc._rng.random() == mc._rng.random()
     assert reconstructed_mc._rng.integers(0, 100) == mc._rng.integers(0, 100)
@@ -245,7 +243,7 @@ def test_canonical_restart(bulk_small, tmp_path):
 
     external_rng = default_rng(42)
 
-    for _ in mc.irun(20):
+    for _ in mc.run_steps(20):
         energies.append(mc.context.last_energy)
 
     energies_reconstructed = []
@@ -254,7 +252,8 @@ def test_canonical_restart(bulk_small, tmp_path):
     current_mc = reconstructed_mc
     while i < 20:
         for _ in range(20 - i):
-            current_mc.step()
+            for _ in current_mc.step():
+                ...
             i += 1
             energies_reconstructed.append(current_mc.context.last_energy)
 
@@ -264,4 +263,19 @@ def test_canonical_restart(bulk_small, tmp_path):
         current_mc = Canonical.from_dict(current_mc.to_dict())
         current_mc.atoms.calc = bulk_small.calc
 
-    assert_allclose(energies[1:], energies_reconstructed)
+    assert_allclose(energies, energies_reconstructed)
+
+    mc_reconstructed = Canonical.from_dict(
+        mc.to_dict(),
+        logfile=tmp_path / "mc.log",
+        trajectory=tmp_path / "mc.xyz",
+        restart_file=tmp_path / "mc_restart.json",
+        logging_interval=6,
+        max_cycles=10,
+    )
+
+    assert str(mc_reconstructed.default_logger) == str(mc.default_logger)
+    assert str(mc_reconstructed.default_trajectory) == str(mc.default_trajectory)
+    assert str(mc_reconstructed.default_restart) == str(mc.default_restart)
+    assert mc_reconstructed.logging_interval == 6
+    assert mc_reconstructed.max_cycles == 10

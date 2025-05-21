@@ -29,6 +29,7 @@ from quansino.operations.displacement import (
     Translation,
     TranslationRotation,
 )
+from quansino.registry import register_class
 
 __all__ = [
     "AnisotropicDeformation",
@@ -57,3 +58,6 @@ operations_registry = {
     "IsotropicVolume": IsotropicVolume,
     "AnisotropicDeformation": AnisotropicDeformation,
 }
+
+for name, cls in operations_registry.items():
+    register_class(cls, name)

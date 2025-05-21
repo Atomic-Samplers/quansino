@@ -9,7 +9,7 @@ from ase.atoms import Atoms
 from ase.build import molecule
 
 from quansino.mc.contexts import ExchangeContext
-from quansino.moves.displacement import BaseMove, DisplacementMove
+from quansino.moves.displacement import DisplacementMove
 from quansino.operations.displacement import Translation, TranslationRotation
 
 if TYPE_CHECKING:
@@ -29,7 +29,7 @@ class ExchangeMove[ContextType: ExchangeContext](DisplacementMove[ContextType]):
     ----------
     exchange_atoms : Atoms | str
         The atoms to exchange. If a string is provided, it will be converted to an Atoms object using ase.build.molecule.
-    exchangeable_labels : IntegerArray
+    labels : IntegerArray
         The labels of the atoms that can be exchanged (already present).
     operation : Operation, optional
         The operation to perform in the move, by default None (will use Translation for single atoms or TranslationRotation for multiple atoms).
@@ -51,7 +51,7 @@ class ExchangeMove[ContextType: ExchangeContext](DisplacementMove[ContextType]):
 
     Important
     ---------
-    1. At object creation, `exchangeable_labels` must have the same length as the number of atoms in the simulation.
+    1. At object creation, `labels` must have the same length as the number of atoms in the simulation.
     2. Any labels that are not negative integers are considered exchangeable (deletable).
     3. Atoms that share the same label are considered to be part of the same group (molecule) and will be deleted together.
     4. Monte Carlo simulations like [`GrandCanonical`][quansino.mc.gcmc.GrandCanonical] will automatically update the labels of all linked moves to keep them in sync.
@@ -62,7 +62,7 @@ class ExchangeMove[ContextType: ExchangeContext](DisplacementMove[ContextType]):
     def __init__(
         self,
         exchange_atoms: Atoms | str,
-        exchangeable_labels: IntegerArray,
+        labels: IntegerArray,
         operation: Operation | None = None,
         bias_towards_insert: float = 0.5,
         apply_constraints: bool = True,
@@ -86,7 +86,7 @@ class ExchangeMove[ContextType: ExchangeContext](DisplacementMove[ContextType]):
 
             operation = default_operation
 
-        super().__init__(exchangeable_labels, operation, apply_constraints)
+        super().__init__(labels, operation, apply_constraints)
 
     def __call__(self) -> bool:
         """
@@ -126,15 +126,15 @@ class ExchangeMove[ContextType: ExchangeContext](DisplacementMove[ContextType]):
             self.context.added_atoms = self.to_add_atoms
         else:
             if self.to_delete_indices is None:
-                if not len(self.unique_moving_labels):
+                if not len(self.unique_labels):
                     return self.register_failure()
 
                 self.to_delete_indices = int(
-                    self.context.rng.choice(self.unique_moving_labels)
+                    self.context.rng.choice(self.unique_labels)
                 )
 
             (self.context.deleted_indices,) = np.where(
-                self.moving_labels == self.to_delete_indices
+                self.labels == self.to_delete_indices
             )
 
             self.context.deleted_atoms = self.context.atoms[
@@ -188,9 +188,9 @@ class ExchangeMove[ContextType: ExchangeContext](DisplacementMove[ContextType]):
         return False
 
     def to_dict(self) -> dict[str, Any]:
-        return {
-            **BaseMove.to_dict(self),
-            "exchange_atoms": self.exchange_atoms,
-            "bias_towards_insert": self.bias_towards_insert,
-            "exchangeable_labels": self.moving_labels,
-        }
+        dictionary = super().to_dict()
+        kwargs = dictionary.setdefault("kwargs", {})
+        kwargs["exchange_atoms"] = self.exchange_atoms
+        kwargs["bias_towards_insert"] = self.bias_towards_insert
+
+        return dictionary

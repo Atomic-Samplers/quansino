@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 from warnings import warn
 
 import numpy as np
 from ase.units import kB
+from numpy.random import PCG64
+from numpy.random import Generator as RNG
 
-from quansino.mc.core import MonteCarlo
+from quansino.mc.core import Driver
 from quansino.utils.atoms import has_constraint
 
 if TYPE_CHECKING:
@@ -20,7 +22,7 @@ if TYPE_CHECKING:
     from quansino.type_hints import Displacement, Forces, Masses, ShapedMasses
 
 
-class ForceBias(MonteCarlo):
+class ForceBias(Driver):
     """
     Force Bias Monte Carlo class to perform simulations as described in
     https://doi.org/10.1063/1.4902136.
@@ -55,23 +57,32 @@ class ForceBias(MonteCarlo):
     gamma_max_value = 709.782712
 
     def __init__(
-        self, atoms: Atoms, delta: float, temperature: float = 298.15, **mc_kwargs
+        self,
+        atoms: Atoms,
+        delta: float,
+        temperature: float = 298.15,
+        seed: int | None = None,
+        **driver_kwargs: Any,
     ) -> None:
         """Initialize the Force Bias Monte Carlo object."""
         self.delta = delta
         self.temperature = temperature
+
+        self.__seed: Final = seed or PCG64().random_raw()
+        self._rng = RNG(PCG64(self.__seed))
 
         self.size = (len(atoms), 3)
 
         self.update_masses(atoms.get_masses())
         self.set_masses_scaling_power(np.full((len(atoms), 3), 0.25))
 
-        super().__init__(atoms, **mc_kwargs)
+        super().__init__(atoms, **driver_kwargs)
 
         if not has_constraint(self.atoms, "FixCom"):
             warn(
                 "No `FixCom` constraint found, `ForceBias` simulations can lead to sustained drift of the center of mass.",
-                stacklevel=2,
+                UserWarning,
+                2,
             )
 
         self.gamma = 0.0
@@ -104,14 +115,18 @@ class ForceBias(MonteCarlo):
 
     def to_dict(self) -> dict[str, Any]:
         """Return a dictionary representation of the object."""
-        dictionary = MonteCarlo.to_dict(self)
-        dictionary.update(
-            {
-                "temperature": self.temperature,
-                "delta": self.delta,
-                "masses_scaling_power": self.masses_scaling_power,
-            }
-        )
+        dictionary = super().to_dict()
+        dictionary["rng_state"] = self._rng.bit_generator.state
+
+        dictionary.setdefault("kwargs", {})
+        dictionary["kwargs"] = {
+            "seed": self.__seed,
+            "temperature": self.temperature,
+            "delta": self.delta,
+        }
+
+        dictionary.setdefault("attributes", {})
+        dictionary["attributes"]["masses_scaling_power"] = self.masses_scaling_power
 
         return dictionary
 

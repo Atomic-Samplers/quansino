@@ -77,16 +77,16 @@ def test_todict(bulk_small, tmp_path):
         temperature=5000,
     )
 
-    dictionary = fbmc.todict()
+    dictionary = fbmc.to_dict()
 
-    assert dictionary["type"] == "monte-carlo"
-    assert dictionary["mc-type"] == "ForceBias"
-    assert dictionary["seed"] == 42
-    assert dictionary["nsteps"] == 0
-    assert dictionary["temperature"] == 5000
-    assert dictionary["delta"] == 0.01
+    assert dictionary["name"] == "ForceBias"
+    assert dictionary["kwargs"]["seed"] == 42
+    assert dictionary["attributes"]["step_count"] == 0
+    assert dictionary["kwargs"]["temperature"] == 5000
+    assert dictionary["kwargs"]["delta"] == 0.01
     assert_allclose(
-        dictionary["masses_scaling_power"], np.full((len(fbmc.atoms), 3), 0.25)
+        dictionary["attributes"]["masses_scaling_power"],
+        np.full((len(fbmc.atoms), 3), 0.25),
     )
     assert dictionary["rng_state"] is not None
 

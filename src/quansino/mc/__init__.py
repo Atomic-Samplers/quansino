@@ -19,6 +19,7 @@ from quansino.mc.criteria import (
 from quansino.mc.fbmc import ForceBias
 from quansino.mc.gcmc import GrandCanonical
 from quansino.mc.isobaric import Isobaric
+from quansino.registry import register_class
 
 __all__ = [
     "Canonical",
@@ -36,3 +37,21 @@ __all__ = [
     "MoveStorage",
     "StrainContext",
 ]
+
+mc_registry = {
+    "Canonical": Canonical,
+    "Isobaric": Isobaric,
+    "GrandCanonical": GrandCanonical,
+    "ForceBias": ForceBias,
+    "DisplacementContext": DisplacementContext,
+    "ExchangeContext": ExchangeContext,
+    "StrainContext": StrainContext,
+    "CanonicalCriteria": CanonicalCriteria,
+    "IsobaricCriteria": IsobaricCriteria,
+    "GrandCanonicalCriteria": GrandCanonicalCriteria,
+    "MonteCarlo": MonteCarlo,
+    "MoveStorage": MoveStorage,
+}
+
+for name, mc_class in mc_registry.items():
+    register_class(mc_class, name)

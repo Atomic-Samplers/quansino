@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from math import exp
+from typing import Any
 
 import numpy as np
 
@@ -24,6 +25,17 @@ class StrainOperation(Operation):
 
     def __init__(self, max_value: float) -> None:
         self.max_value = max_value
+
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert the operation to a dictionary representation.
+
+        Returns
+        -------
+        dict[str, Any]
+            The dictionary representation of the operation.
+        """
+        return {**super().to_dict(), "kwargs": {"max_value": self.max_value}}
 
 
 class AnisotropicDeformation(StrainOperation):

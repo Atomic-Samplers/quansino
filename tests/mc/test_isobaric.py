@@ -4,7 +4,6 @@ import numpy as np
 from ase.calculators.calculator import compare_atoms
 from ase.units import bar
 from numpy.testing import assert_allclose, assert_array_equal
-from tests.conftest import DummyCalculator
 
 from quansino.mc.contexts import StrainContext
 from quansino.mc.criteria import Criteria
@@ -16,7 +15,6 @@ from quansino.operations.displacement import Ball
 
 def test_isobaric(bulk_small, rng, tmp_path):
     """Test the Isobaric class."""
-    # Create an instance of the Isobaric class
     mc = Isobaric(
         bulk_small,
         temperature=0.1,
@@ -58,11 +56,14 @@ def test_isobaric(bulk_small, rng, tmp_path):
     old_cell = mc.atoms.cell.copy()
     old_positions = mc.atoms.get_positions().copy()
 
-    mc.step()
+    for _ in mc.step():
+        pass
 
     assert mc.atoms.calc is not None
 
-    if "default_cell_move" in mc.accepted_moves:
+    accepted_moves = [move[0] for move in mc.move_history if move[1]]
+
+    if "default_cell_move" in accepted_moves:
         assert not np.allclose(mc.context.last_cell, old_cell)
         assert not np.allclose(mc.atoms.cell, old_cell)
         assert not np.allclose(mc.context.last_positions, old_positions)
@@ -71,7 +72,7 @@ def test_isobaric(bulk_small, rng, tmp_path):
         assert_allclose(mc.context.last_cell, old_cell)
         assert_allclose(mc.atoms.cell, old_cell)
 
-    if "default_displacement_move" in mc.accepted_moves:
+    if "default_displacement_move" in accepted_moves:
         assert not np.allclose(mc.context.last_positions, old_positions)
         assert not np.allclose(mc.atoms.get_positions(), old_positions)
     else:
@@ -83,32 +84,28 @@ def test_isobaric(bulk_small, rng, tmp_path):
 
     acceptances = []
 
-    for _ in mc.irun(100):
-        assert mc.atoms.calc is not None
+    for step in mc.irun(100):
+        for move_name in step:
+            assert move_name in mc.moves
+            assert mc.atoms.calc is not None
 
-        if mc.acceptance_rate:
+            if mc.move_history and mc.move_history[-1][1]:
+                assert_allclose(mc.context.last_positions, mc.atoms.get_positions())
+                assert_allclose(mc.context.last_cell, mc.atoms.cell)
+            else:
+                assert mc.atoms.calc.results.keys() == mc.last_results.keys()
+                assert all(
+                    np.allclose(mc.last_results[k], mc.atoms.calc.results[k])
+                    for k in mc.last_results
+                    if isinstance(mc.last_results[k], str | float | int)
+                )
+
+            assert not compare_atoms(mc.atoms.calc.atoms, mc.atoms)
             assert_allclose(mc.context.last_positions, mc.atoms.get_positions())
-            assert_allclose(mc.context.last_cell, mc.atoms.cell)
-        else:
-            assert mc.atoms.calc.results.keys() == mc.last_results.keys()
-            assert all(
-                np.allclose(mc.last_results[k], mc.atoms.calc.results[k])
-                for k in mc.last_results
-                if isinstance(mc.last_results[k], str | float | int)
-            )
-
-        assert not compare_atoms(mc.atoms.calc.atoms, mc.atoms)
-        assert_allclose(mc.context.last_positions, mc.atoms.get_positions())
 
         acceptances.append(mc.acceptance_rate)
 
     acceptance_from_log = np.loadtxt(tmp_path / "mc.log", skiprows=1, usecols=-1)
 
-    assert_array_equal(acceptances, acceptance_from_log)
+    assert_array_equal(acceptances, acceptance_from_log[1:])
     assert_allclose(np.sum(acceptances), 50, atol=20)
-
-    mc.atoms.calc = DummyCalculator()
-
-    mc.revert_state()
-    del mc.atoms.calc.results
-    mc.save_state()

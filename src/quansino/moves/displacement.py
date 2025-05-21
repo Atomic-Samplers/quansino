@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 
 from quansino.mc.contexts import DisplacementContext
-from quansino.moves.core import BaseMove
+from quansino.moves.core import BaseMove, CompositeMove
 from quansino.operations.displacement import Box
 
 if TYPE_CHECKING:
@@ -26,7 +26,7 @@ class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
 
     Parameters
     ----------
-    moving_labels : IntegerArray
+    labels : IntegerArray
         The labels of the atoms to displace. Atoms with negative labels are not displaced.
     operation : Operation, optional
         The operation to perform in the move, by default None.
@@ -50,15 +50,15 @@ class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
 
     Important
     ---------
-    1. At object creation, `moving_labels` must have the same length as the number of atoms in the simulation.
+    1. At object creation, `labels` must have the same length as the number of atoms in the simulation.
     2. Conditions for a successful move can be tightened either by subclassing the move and overriding the `check_move` method, or by using the [`MethodType`][types.MethodType] function to replace the method in the instance.
     """
 
-    is_updatable: Literal[True] = True
+    is_updatable: bool = True
 
     def __init__(
         self,
-        moving_labels: IntegerArray,
+        labels: IntegerArray,
         operation: Operation | None = None,
         apply_constraints: bool = True,
     ) -> None:
@@ -66,7 +66,7 @@ class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
 
         Parameters
         ----------
-        moving_labels : IntegerArray
+        labels : IntegerArray
             The labels of the atoms to displace. Atoms with negative labels are not displaced.
         operation : Operation, optional
             The operation to perform in the move, by default None.
@@ -78,7 +78,7 @@ class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
         self.displaced_labels: int | None = None
 
         self.default_label: int | None = None
-        self.set_moving_labels(moving_labels)
+        self.set_labels(labels)
 
         if operation is None:
             operation = Box(0.1)
@@ -130,13 +130,13 @@ class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
         self.context.reset()
 
         if self.to_displace_labels is None:
-            if len(self.unique_moving_labels) == 0:
+            if len(self.unique_labels) == 0:
                 return self.register_failure()
 
-            self.to_displace_labels = self.context.rng.choice(self.unique_moving_labels)
+            self.to_displace_labels = self.context.rng.choice(self.unique_labels)
 
         (self.context.moving_indices,) = np.where(
-            self.moving_labels == self.to_displace_labels
+            self.labels == self.to_displace_labels
         )
 
         if self.attempt_move():
@@ -144,7 +144,7 @@ class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
         else:
             return self.register_failure()
 
-    def set_moving_labels(self, new_labels: IntegerArray) -> None:
+    def set_labels(self, new_labels: IntegerArray) -> None:
         """
         Set the labels of the atoms to displace and update the unique labels. This function should always be used to set the labels.
 
@@ -153,10 +153,8 @@ class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
         new_labels : IntegerArray
             The new labels of the atoms to displace.
         """
-        self.moving_labels: IntegerArray = np.asarray(new_labels)
-        self.unique_moving_labels: IntegerArray = np.unique(
-            self.moving_labels[self.moving_labels >= 0]
-        )
+        self.labels: IntegerArray = np.asarray(new_labels)
+        self.unique_labels: IntegerArray = np.unique(self.labels[self.labels >= 0])
 
     def register_success(self) -> Literal[True]:
         """
@@ -206,25 +204,23 @@ class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
         """
         if len(indices_to_add):
             label: int = self.default_label or (
-                max(self.unique_moving_labels) + 1
-                if len(self.unique_moving_labels)
-                else 0
+                max(self.unique_labels) + 1 if len(self.unique_labels) else 0
             )
-            self.set_moving_labels(
-                np.hstack((self.moving_labels, np.full(len(indices_to_add), label)))
+            self.set_labels(
+                np.hstack((self.labels, np.full(len(indices_to_add), label)))
             )
 
         if len(indices_to_remove):
-            self.set_moving_labels(np.delete(self.moving_labels, indices_to_remove))
+            self.set_labels(np.delete(self.labels, indices_to_remove))
 
-        if len(self.moving_labels) != len(self.context.atoms):
+        if len(self.labels) != len(self.context.atoms):
             raise ValueError(
                 "Updating the labels went wrong, the length of the labels is not equal to the number of atoms."
             )
 
     def __add__(
-        self: DisplacementMove, other: DisplacementMove | CompositeDisplacementMove
-    ) -> CompositeDisplacementMove:
+        self, other: DisplacementMove | CompositeDisplacementMove
+    ) -> CompositeDisplacementMove[DisplacementMove]:
         """
         Add two displacement moves together to create a composite move.
 
@@ -239,11 +235,13 @@ class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
             The composite move.
         """
         if isinstance(other, CompositeDisplacementMove):
-            return CompositeDisplacementMove([self, *other.moves])
+            argument = [self, *other.moves]
         else:
-            return CompositeDisplacementMove([self, other])
+            argument = [self, other]
 
-    def __mul__(self: DisplacementMove, n: int) -> CompositeDisplacementMove:
+        return CompositeDisplacementMove(argument)
+
+    def __mul__(self, n: int) -> CompositeDisplacementMove[DisplacementMove]:
         """
         Multiply the displacement move by an integer to create a composite move.
 
@@ -261,11 +259,12 @@ class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
             raise ValueError(
                 "The number of times the move is repeated must be a positive, non-zero integer."
             )
-        return CompositeDisplacementMove([self] * n)
+
+        return CompositeDisplacementMove[DisplacementMove]([self] * n)
 
     __rmul__ = __mul__
 
-    def __copy__(self) -> DisplacementMove:
+    def __copy__(self) -> DisplacementMove[ContextType]:
         """
         Create a shallow copy of the move.
 
@@ -274,19 +273,31 @@ class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
         DisplacementMove
             The shallow copy of the move.
         """
-        new_move = DisplacementMove(
-            self.moving_labels, self.operation, self.apply_constraints
+        new_move = DisplacementMove[ContextType](
+            self.labels, self.operation, self.apply_constraints
         )
         new_move.__dict__.update(self.__dict__)
 
         return new_move
 
     def to_dict(self) -> dict[str, Any]:
-        return {**super().to_dict(), "moving_labels": self.moving_labels}
+        """
+        Convert the move to a dictionary.
+
+        Returns
+        -------
+        dict[str, str | bool]
+            A dictionary representation of the move.
+        """
+        dictionary = super().to_dict()
+        dictionary.setdefault("kwargs", {})["labels"] = self.labels
+        dictionary.setdefault("attributes", {})["default_label"] = self.default_label
+
+        return dictionary
 
 
-class CompositeDisplacementMove[ContextType: DisplacementContext](
-    BaseMove[ContextType]
+class CompositeDisplacementMove[MoveType: DisplacementMove[DisplacementContext]](
+    CompositeMove[MoveType]
 ):
     """
     Class to perform a composite displacement operation on atoms. This class is returned when adding or multiplying [`DisplacementMove`][quansino.moves.displacement.DisplacementMove] objects together.
@@ -310,10 +321,10 @@ class CompositeDisplacementMove[ContextType: DisplacementContext](
         Whether to allow the same label to be displaced multiple times in a single move.
     """
 
-    is_updatable: Literal[True] = True
+    is_updatable: bool = True
 
-    def __init__(self, moves: list[DisplacementMove[ContextType]]) -> None:
-        self.moves = moves
+    def __init__(self, moves: list[MoveType]) -> None:
+        super().__init__(moves)
 
         self.displaced_labels: list[int | None] = []
         self.number_of_moved_particles: int = 0
@@ -341,10 +352,8 @@ class CompositeDisplacementMove[ContextType: DisplacementContext](
                 filtered_displaced_labels = [
                     atom for atom in self.displaced_labels if atom is not None
                 ]
-                available_candidates = np.setdiff1d(
-                    move.unique_moving_labels,
-                    filtered_displaced_labels,
-                    assume_unique=True,
+                available_candidates: IntegerArray = np.setdiff1d(
+                    move.unique_labels, filtered_displaced_labels, assume_unique=True
                 )
                 if len(available_candidates) == 0:
                     self.register_failure()
@@ -359,7 +368,7 @@ class CompositeDisplacementMove[ContextType: DisplacementContext](
 
         return self.number_of_moved_particles > 0
 
-    def register_success(self, move: DisplacementMove) -> None:
+    def register_success(self, move: MoveType) -> None:
         """Register a successful move, saving the current state."""
         self.displaced_labels.append(move.displaced_labels)
         self.number_of_moved_particles += 1
@@ -371,31 +380,6 @@ class CompositeDisplacementMove[ContextType: DisplacementContext](
     def reset(self) -> None:
         self.displaced_labels = []
         self.number_of_moved_particles = 0
-
-    def __add__(
-        self, other: DisplacementMove | CompositeDisplacementMove
-    ) -> CompositeDisplacementMove:
-        """
-        Add two displacement moves together to create a composite move.
-
-        Parameters
-        ----------
-        other : DisplacementMove
-            The other displacement move to add.
-
-        Returns
-        -------
-        CompositeDisplacementMove
-            The composite move.
-        """
-        if isinstance(other, CompositeDisplacementMove):
-            return type(self)(self.moves + other.moves)
-        else:
-            return type(self)([*self.moves, other])
-
-    def attach_simulation(self, context: ContextType) -> None:
-        for move in self.moves:
-            move.attach_simulation(context)
 
     def update(
         self, indices_to_add: IntegerArray, indices_to_remove: IntegerArray
@@ -418,51 +402,10 @@ class CompositeDisplacementMove[ContextType: DisplacementContext](
         for move in self.moves:
             move.update(indices_to_add, indices_to_remove)
 
-    def __mul__(self, n: int) -> CompositeDisplacementMove:
-        """
-        Multiply the displacement move by an integer to create a composite move.
+    def to_dict(self) -> dict[str, Any]:
+        dictionary = super().to_dict()
+        dictionary.setdefault("attributes", {})[
+            "with_replacement"
+        ] = self.with_replacement
 
-        Parameters
-        ----------
-        n : int
-            The number of times to repeat the move.
-
-        Returns
-        -------
-        CompositeDisplacementMove
-            The composite move.
-        """
-        if n < 1 or not isinstance(n, int):
-            raise ValueError(
-                "The number of times the move is repeated must be a positive, non-zero integer."
-            )
-        return type(self)(self.moves * n)
-
-    def __getitem__(self, index: int) -> DisplacementMove:
-        """
-        Get the move at the specified index.
-
-        Parameters
-        ----------
-        index : int
-            The index of the move.
-
-        Returns
-        -------
-        DisplacementMove
-            The move at the specified index.
-        """
-        return self.moves[index]
-
-    def __len__(self) -> int:
-        return len(self.moves)
-
-    def __iter__(self):
-        return iter(self.moves)
-
-    __rmul__ = __mul__
-
-    __imul__ = __mul__
-
-    def to_dict(self):
-        return {**super().to_dict(), "moves": [move.to_dict() for move in self.moves]}
+        return dictionary

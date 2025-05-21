@@ -65,7 +65,9 @@ class GrandCanonical[MoveProtocol: ExchangeProtocol, ContextType: ExchangeContex
         chemical_potential: float = 0.0,
         number_of_exchange_particles: int = 0,
         max_cycles: int | None = None,
-        default_displacement_move: MoveProtocol | None = None,
+        default_displacement_move: (
+            MoveStorage[MoveProtocol] | MoveProtocol | None
+        ) = None,
         default_exchange_move: MoveStorage[MoveProtocol] | MoveProtocol | None = None,
         **mc_kwargs,
     ) -> None:

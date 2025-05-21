@@ -13,6 +13,7 @@ from quansino.moves.displacement import DisplacementMove
 from quansino.moves.protocol import CellProtocol, DisplacementProtocol
 
 if TYPE_CHECKING:
+    from collections.abc import Generator
 
     from ase.atoms import Atoms
 
@@ -123,15 +124,15 @@ class Isobaric[
         if displacement_move := self.moves.get("default_displacement_move"):
             displacement_move.probability = 1 / (1 + 1 / len(self.atoms))
 
-    def initialize_step(self) -> None:
+    def step(self) -> Generator[str, None, None]:
         """
         Perform operations before the Monte Carlo step.
 
         This method saves the current cell state in addition to the operations
         performed by the parent class.
         """
-        super().initialize_step()
         self.context.last_cell = self.atoms.get_cell()
+        yield from super().step()
 
     def save_state(self) -> None:
         """

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
+from typing import IO, TYPE_CHECKING
 
 import numpy as np
 from ase import units
@@ -64,9 +64,16 @@ class Logger(TextObserver):
         [`add_opt_fields`][quansino.io.logger.Logger.add_opt_fields].
     """
 
-    def __init__(self, logfile: str | Path, interval: int, mode: str = "a") -> None:
-        """Initialize the molecular dynamics logger."""
-        super().__init__(logfile, interval, mode)
+    def __init__(
+        self,
+        logfile: IO | str | Path,
+        interval: int,
+        mode: str = "a",
+        **observer_kwargs: Any,
+    ) -> None:
+        """Initialize the simulation `Logger` object."""
+        super().__init__(file=logfile, interval=interval, mode=mode, **observer_kwargs)
+
         self.fields: dict[str | tuple[str, ...], dict[str, Any]] = {}
 
     def __call__(self) -> None:
@@ -83,8 +90,8 @@ class Logger(TextObserver):
             else:
                 parts.append(self.fields[key]["str_format"].format(value))
 
-        self.file.write(" ".join(parts) + "\n")
-        self.file.flush()
+        self._file.write(" ".join(parts) + "\n")
+        self._file.flush()
 
     def create_header(self) -> str:
         """
@@ -173,7 +180,10 @@ class Logger(TextObserver):
             The `MonteCarlo` simulation object to track.
         """
         names = ["Step", "Epot[eV]"]
-        functions = [lambda: simulation.nsteps, simulation.atoms.get_potential_energy]
+        functions = [
+            lambda: simulation.step_count,
+            simulation.atoms.get_potential_energy,
+        ]
         str_formats = ["{:<12d}", "{:>12.4f}"]
 
         for name, function, str_format in zip(
@@ -309,4 +319,4 @@ class Logger(TextObserver):
 
     def write_header(self) -> None:
         """Write the header line to the log file."""
-        self.file.write(f"{self.create_header()}\n")
+        self._file.write(f"{self.create_header()}\n")

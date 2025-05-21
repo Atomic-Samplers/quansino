@@ -15,7 +15,7 @@ from quansino.io import Logger
 def test_logger():
     string_io = StringIO()
 
-    logger = Logger(string_io)
+    logger = Logger(string_io, interval=1)
     logger.add_field("Class", lambda: "GrandCanonicalMC", str_format="{:<24s}")
     logger.add_field("Epot[eV]", lambda: 123141.0)
     logger.add_field("Step", lambda: 1, str_format="{:>12d}")
@@ -38,7 +38,7 @@ def test_opt_custom_logger(bulk_small):
     bulk_small.rattle(0.1)
 
     string_io = StringIO()
-    logger = Logger(string_io)
+    logger = Logger(string_io, interval=1)
     opt = BFGS(bulk_small, logfile=None)
 
     def negative_omega():
@@ -66,7 +66,7 @@ def test_opt_custom_logger(bulk_small):
 
 def test_md_logger(bulk_small):
     string_io = StringIO()
-    logger = Logger(string_io)
+    logger = Logger(string_io, interval=1)
 
     MaxwellBoltzmannDistribution(bulk_small, temperature_K=300)
     dyn = VelocityVerlet(bulk_small, 1.0 * fs)
@@ -94,7 +94,7 @@ def test_opt_stress_logger(bulk_small):
     bulk_small.calc = EMT()  # switch to EMT for stress calculation
 
     string_io = StringIO()
-    logger = Logger(string_io)
+    logger = Logger(string_io, interval=1)
 
     MaxwellBoltzmannDistribution(bulk_small, temperature_K=300)
     dyn = VelocityVerlet(bulk_small, 1.0 * fs)

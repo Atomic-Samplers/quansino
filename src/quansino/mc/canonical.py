@@ -63,7 +63,7 @@ class Canonical[MoveProtocol: DisplacementProtocol, ContextType: DisplacementCon
         default_displacement_move: (
             MoveStorage[MoveProtocol] | MoveProtocol | None
         ) = None,
-        **mc_kwargs,
+        **mc_kwargs: Any,
     ) -> None:
         """Initialize the Canonical Monte Carlo object."""
         if max_cycles is None:
@@ -74,7 +74,7 @@ class Canonical[MoveProtocol: DisplacementProtocol, ContextType: DisplacementCon
         self.temperature = temperature
 
         self.acceptance_rate: float = 0.0
-        self.accepted_moves: list[str] = []
+        self.performed_moves: list[tuple[str, bool]] = []
 
         if default_displacement_move:
             self.add_move(default_displacement_move, name="default_displacement_move")
@@ -106,60 +106,33 @@ class Canonical[MoveProtocol: DisplacementProtocol, ContextType: DisplacementCon
         """
         self.context.temperature = temperature
 
-    def yield_moves(self) -> Generator[str, None, None]:
-        """
-        Yield the names of accepted moves after evaluating their acceptance criteria.
+    def step(self) -> Generator[str, None, None]:
+        """Perform a single Monte Carlo step, iterating over all selected moves in [`yield_moves`][quansino.mc.canonical.Canonical.yield_moves]."""
+        self.context.last_positions = self.atoms.get_positions()
 
-        Yields
-        ------
-        Generator[str, None, None]
-            The names of the accepted moves.
-        """
-        for move_name in super().yield_moves():
-            move_storage = self.moves[move_name]
-            move = move_storage.move
-
-            if move():
-                is_accepted = move_storage.criteria.evaluate(self.context)
-                if is_accepted:
-                    self.save_state()
-                    yield move_name
-                else:
-                    self.revert_state()
-
-    def initialize_step(self) -> None:
-        """Perform operations before the Monte Carlo step."""
         if np.isnan(self.context.last_energy):
             self.context.last_energy = self.atoms.get_potential_energy()
 
-        self.context.last_positions = self.atoms.get_positions()
-        self.last_results = self.atoms.calc.results  # type: ignore
-
-    def step(self) -> Any:
-        """Perform a single Monte Carlo step, iterating over all selected moves in [`yield_moves`][quansino.mc.canonical.Canonical.yield_moves]."""
-        self.initialize_step()
-        self.accepted_moves = list(self.yield_moves())
-        self.acceptance_rate = len(self.accepted_moves) / self.max_cycles
+        yield from super().step()
 
     def save_state(self) -> None:
         """Save the current state of the context and update the last positions and results."""
         self.context.last_positions = self.atoms.get_positions()
         self.context.last_energy = self.atoms.get_potential_energy()
 
-        try:
-            self.last_results = self.atoms.calc.results  # type: ignore
-        except AttributeError:
-            warn(
-                "Atoms object does not have calculator results attached.", stacklevel=2
-            )
-            self.last_results = {}
+        super().save_state()
 
     def revert_state(self) -> None:
         """Revert to the previously saved state and undo the last move by restoring the last positions."""
+        super().revert_state()
+
         self.atoms.positions = self.context.last_positions.copy()
 
         try:
             self.atoms.calc.atoms.positions = self.atoms.positions.copy()  # type: ignore
-            self.atoms.calc.results = self.last_results  # type: ignore
         except AttributeError:
-            warn("Atoms object does not have calculator attached.", stacklevel=2)
+            warn(
+                "The calculator does not support restoring positions. Please check that your calculator is fully compatible with quansino.",
+                UserWarning,
+                2,
+            )

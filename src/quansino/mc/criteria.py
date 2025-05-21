@@ -55,10 +55,8 @@ class Criteria(ABC):
         """
         return {"name": self.__class__.__name__}
 
-    @staticmethod
-    def from_dict(
-        data: dict[str, Any], criteria_registry: dict[str, type[Criteria]] | None = None
-    ) -> Criteria:
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Criteria:
         """
         Create a criteria object from a dictionary.
 
@@ -72,10 +70,13 @@ class Criteria(ABC):
         Criteria
             The criteria object created from the dictionary.
         """
-        if criteria_registry is None:
-            from quansino.mc.criteria import criteria_registry
+        kwargs = data.get("kwargs", {})
+        instance = cls(**kwargs)
 
-        return criteria_registry[data["name"]](**data.get("kwargs", {}))
+        for key, value in data.get("attributes", {}).items():
+            setattr(instance, key, value)
+
+        return instance
 
 
 class CanonicalCriteria(Criteria):
@@ -215,10 +216,3 @@ class GrandCanonicalCriteria(Criteria):
         criteria = math.exp(exponential)
 
         return context.rng.random() < criteria * prefactor
-
-
-criteria_registry: dict[str, type[Criteria]] = {
-    "CanonicalCriteria": CanonicalCriteria,
-    "IsobaricCriteria": IsobaricCriteria,
-    "GrandCanonicalCriteria": GrandCanonicalCriteria,
-}

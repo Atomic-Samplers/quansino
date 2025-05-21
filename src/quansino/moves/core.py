@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-from typing import Any
+from copy import deepcopy
+from typing import Any, Self
 
 from quansino.mc.contexts import Context
 from quansino.operations.core import Operation
+from quansino.registry import get_typed_class
 
 
 class BaseMove[ContextType: Context]:
@@ -77,16 +79,29 @@ class BaseMove[ContextType: Context]:
         """
         return {
             "name": self.__class__.__name__,
-            "operation": self.operation.to_dict(),
-            "apply_constraints": self.apply_constraints,
+            "kwargs": {
+                "operation": self.operation.to_dict(),
+                "apply_constraints": self.apply_constraints,
+            },
         }
 
-    @staticmethod
-    def from_dict(
-        data: dict[str, Any],
-        moves_registry: dict[str, type[BaseMove]] | None = None,
-        operations_registry: dict[str, type[Operation]] | None = None,
-    ) -> BaseMove:
+    def __call__(self) -> bool:
+        """
+        Call the move. This method should be implemented in the subclass, and should return a boolean indicating whether the move was accepted.
+
+        Returns
+        -------
+        bool
+            Whether the move was accepted.
+        """
+        if self.check_move():
+            self.operation.calculate(self.context)
+            return True
+        else:
+            return False
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
         """
         Create a move from a dictionary.
 
@@ -97,15 +112,176 @@ class BaseMove[ContextType: Context]:
 
         Returns
         -------
-        BaseMove
-            The move object created from the dictionary.
+        Self
+            The move created from the dictionary.
         """
-        if moves_registry is None:
-            from quansino.moves import moves_registry
+        kwargs = deepcopy(data.get("kwargs", {}))
 
-        if "operation" in data:
-            data["operation"] = Operation.from_dict(
-                data["operation"], operations_registry
+        if "operation" in kwargs:
+            operation_data = kwargs["operation"]
+
+            operation_class: type[Operation] = get_typed_class(
+                operation_data["name"], Operation
             )
 
-        return moves_registry[data.pop("name")](**data)
+            kwargs["operation"] = operation_class.from_dict(operation_data)
+
+        instance = cls(**kwargs)
+
+        for key, value in data.get("attributes", {}).items():
+            setattr(instance, key, value)
+
+        return instance
+
+
+class CompositeMove[MoveType: BaseMove]:
+    """
+    Class to perform a composite displacement operation on atoms. This class is returned when adding or multiplying [`DisplacementMove`][quansino.moves.displacement.DisplacementMove] objects together.
+
+    Parameters
+    ----------
+    moves : list[DisplacementMove]
+        The moves to perform in the composite move.
+
+    Attributes
+    ----------
+    is_updatable : Literal[True]
+        Whether the move can be updated when atoms are added or removed.
+    moves : list[DisplacementMove]
+        The moves to perform in the composite move.
+    displaced_labels : list[int | None]
+        The labels of the atoms that were displaced in the last move.
+    number_of_moved_particles : int
+        The number of particles that were moved in the last move.
+    with_replacement : bool
+        Whether to allow the same label to be displaced multiple times in a single move.
+    """
+
+    def __init__(self, moves: list[MoveType]) -> None:
+        self.moves = moves
+
+    def __call__(self) -> bool:
+        """
+        Perform the displacement move. The following steps are performed:
+
+        1. If no candidates are available, return False and does not register a move.
+        2. Check if there are enough candidates to displace. If yes, select `displacements_per_move` number of candidates from the available candidates, if not, select the maximum number of candidates available.
+        3. If `to_displace_labels` is None, select `displacements_per_move` candidates from the available candidates.
+        4. Attempt to move each candidate using `attempt_move`. If any of the moves is successful, register a success and return True. Otherwise, register a failure and return False.
+
+        Returns
+        -------
+        bool
+            Whether the move was valid.
+        """
+        return any(move() for move in self.moves)
+
+    def __add__(self, other: CompositeMove[MoveType] | MoveType) -> Self:
+        """
+        Add two displacement moves together to create a composite move.
+
+        Parameters
+        ----------
+        other : DisplacementMove
+            The other displacement move to add.
+
+        Returns
+        -------
+        CompositeDisplacementMove
+            The composite move.
+        """
+        if isinstance(other, CompositeMove):
+            return type(self)(self.moves + other.moves)
+        else:
+            return type(self)([*self.moves, other])
+
+    def attach_simulation(self, context: Context) -> None:
+        for move in self.moves:
+            move.attach_simulation(context)
+
+    def __mul__(self, n: int) -> Self:
+        """
+        Multiply the displacement move by an integer to create a composite move.
+
+        Parameters
+        ----------
+        n : int
+            The number of times to repeat the move.
+
+        Returns
+        -------
+        CompositeDisplacementMove
+            The composite move.
+        """
+        if n < 1 or not isinstance(n, int):
+            raise ValueError(
+                "The number of times the move is repeated must be a positive, non-zero integer."
+            )
+        return type(self)(self.moves * n)
+
+    def __getitem__(self, index: int) -> MoveType:
+        """
+        Get the move at the specified index.
+
+        Parameters
+        ----------
+        index : int
+            The index of the move.
+
+        Returns
+        -------
+        DisplacementMove
+            The move at the specified index.
+        """
+        return self.moves[index]
+
+    def __len__(self) -> int:
+        return len(self.moves)
+
+    def __iter__(self):
+        return iter(self.moves)
+
+    __rmul__ = __mul__
+
+    __imul__ = __mul__
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.__class__.__name__,
+            "kwargs": {"moves": [move.to_dict() for move in self.moves]},
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> Self:
+        """
+        Create a composite operation from a dictionary.
+
+        Parameters
+        ----------
+        data : dict[str, Any]
+            The dictionary representation of the operation.
+
+        Returns
+        -------
+        CompositeOperation
+            The composite operation object created from the dictionary.
+        """
+        moves = []
+        kwargs = deepcopy(data.get("kwargs", {}))
+
+        if "moves" in kwargs:
+            for move_data in kwargs["moves"]:
+                move_class: type[BaseMove] = get_typed_class(
+                    move_data["name"], BaseMove
+                )
+                move = move_class.from_dict(move_data)
+                moves.append(move)
+
+        kwargs["moves"] = moves
+
+        instance = cls(**kwargs)
+
+        for key, value in data.get("attributes", {}).items():
+            setattr(instance, key, value)
+
+        return instance

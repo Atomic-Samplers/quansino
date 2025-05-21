@@ -259,7 +259,7 @@ def test_grand_canonical_atomic_simulation(empty_atoms, rng):
     initial_position = rng.uniform(-50, 50, (1, 3))
     exchange_atoms = Atoms("H", positions=initial_position)
 
-    move = ExchangeMove(exchange_atoms=exchange_atoms, exchangeable_labels=[])
+    move = ExchangeMove(exchange_atoms=exchange_atoms, labels=[])
     move_storage = MoveStorage(move, 0, 0, 0, DummyCriteria())
 
     gcmc = GrandCanonical(
@@ -357,7 +357,7 @@ def test_grand_canonical_atomic_simulation(empty_atoms, rng):
             move.to_delete_indices = to_delete
             is_deletion = True
         else:
-            move.to_add_atoms = Atoms("He", positions=[[0, 0, 0]], cell=np.eye(3) * 20)
+            move.to_add_atoms = Atoms("C", positions=[[0, 0, 0]], cell=np.eye(3) * 20)
             is_deletion = False
 
         assert move()
@@ -553,8 +553,6 @@ def test_grand_canonical_criteria(rng):
     context.chemical_potential = 0.0
     context.accessible_volume = 10
 
-    context.particle_delta = 1
-
     context.temperature = 298
 
     with pytest.raises(ValueError):
@@ -590,8 +588,7 @@ def test_grand_canonical_criteria(rng):
     context.added_atoms = dihydrogen
 
     probability = context.accessible_volume / (
-        debroglie_wavelength**3
-        * (context.number_of_exchange_particles + context.particle_delta)
+        debroglie_wavelength**3 * (context.number_of_exchange_particles + 1)
     )
 
     assert np.allclose(probability, 13.83662789)
