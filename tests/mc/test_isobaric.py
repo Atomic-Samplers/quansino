@@ -14,7 +14,7 @@ from quansino.operations.displacement import Ball
 
 
 def test_isobaric(bulk_small, rng, tmp_path):
-    """Test the Isobaric class."""
+    """Test the `Isobaric` class."""
     mc = Isobaric(
         bulk_small,
         temperature=0.1,

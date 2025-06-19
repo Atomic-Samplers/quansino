@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 
 
 def test_force_bias(bulk_small, tmp_path):
+    """Test the `ForceBias` Monte Carlo class."""
     fbmc = ForceBias(
         bulk_small,
         delta=0.01,
@@ -30,6 +31,7 @@ def test_force_bias(bulk_small, tmp_path):
 
 
 def test_force_bias_mass_setter(bulk_small, tmp_path):
+    """Test the `ForceBias` Monte Carlo class with mass scaling."""
     fbmc = ForceBias(
         bulk_small,
         delta=0.01,
@@ -67,7 +69,8 @@ def test_force_bias_mass_setter(bulk_small, tmp_path):
         fbmc.set_masses_scaling_power([0.5, 0.5])  # type: ignore[shape]
 
 
-def test_todict(bulk_small, tmp_path):
+def test_fbmc_restart(bulk_small, tmp_path):
+    """Test the restart functionality of the `ForceBias` Monte Carlo class."""
     fbmc = ForceBias(
         bulk_small,
         delta=0.01,
@@ -92,6 +95,7 @@ def test_todict(bulk_small, tmp_path):
 
 
 def test_constraints(bulk_small, tmp_path):
+    """Test the `ForceBias` Monte Carlo class with constraints."""
     fbmc = ForceBias(
         bulk_small,
         delta=0.01,
@@ -113,5 +117,6 @@ def test_constraints(bulk_small, tmp_path):
 
 
 def test_warning(bulk_small):
+    """Test COM warning in `ForceBias`."""
     with pytest.warns(UserWarning):
         ForceBias(bulk_small, delta=0.01, seed=42, temperature=5000, logfile=None)

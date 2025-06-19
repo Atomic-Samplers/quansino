@@ -17,6 +17,7 @@ from quansino.operations import (
 
 
 def test_displacement_operations(single_atom, rng):
+    """Test all displacement operations."""
     context = DisplacementContext(single_atom, rng)
 
     sphere = Sphere(0.1)
@@ -79,6 +80,7 @@ def test_displacement_operations(single_atom, rng):
 
 
 def test_box_operation(bulk_small, rng):
+    """Test the `Box` operation."""
     context = DisplacementContext(bulk_small, rng)
     operation = Box(0.1)
 
@@ -89,6 +91,7 @@ def test_box_operation(bulk_small, rng):
 
 
 def test_sphere_operation(bulk_small, rng):
+    """Test the `Sphere` operation."""
     context = DisplacementContext(bulk_small, rng)
     operation = Sphere(0.1)
 
@@ -99,6 +102,7 @@ def test_sphere_operation(bulk_small, rng):
 
 
 def test_ball_operation(single_atom, rng):
+    """Test the `Ball` operation."""
     operation = Ball(0.1)
     context = DisplacementContext(single_atom, rng)
 
@@ -109,6 +113,7 @@ def test_ball_operation(single_atom, rng):
 
 
 def test_translation_operation(single_atom, rng):
+    """Test the `Translation` operation."""
     single_atom.center(vacuum=20)
 
     operation = Translation()
@@ -132,6 +137,7 @@ def test_translation_operation(single_atom, rng):
 
 
 def test_rotation_operation(single_atom, rng):
+    """Test the `Rotation` operation."""
     context = DisplacementContext(single_atom, rng)
     context._moving_indices = [0]
 
@@ -169,6 +175,7 @@ def test_rotation_operation(single_atom, rng):
 
 
 def test_translation_rotation_operation(single_atom, rng):
+    """Test the `TranslationRotation` operation."""
     context = DisplacementContext(single_atom, rng)
     context._moving_indices = [0]
 

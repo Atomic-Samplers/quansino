@@ -7,9 +7,7 @@ from quansino.constraints import FixRot
 
 
 def test_fix_rot(bulk_large, rng):
-    """
-    Test the FixRot constraint to ensure it removes the rotation of the system
-    """
+    """Test the FixRot constraint to ensure it removes the rotation of the system."""
     fix_rot = FixRot()
     bulk_large.set_constraint(fix_rot)
 

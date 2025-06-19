@@ -12,9 +12,7 @@ from quansino.operations.cell import (
 
 
 def test_isotropic_deformation(bulk_small, rng):
-    """
-    Test the isotropic deformation operation.
-    """
+    """Test isotropic deformation operation."""
     strain_operation = IsotropicDeformation(max_value=0.1)
     context = DeformationContext(bulk_small, rng=rng)
 
@@ -44,9 +42,7 @@ def test_isotropic_deformation(bulk_small, rng):
 
 
 def test_anisotropic_deformation(bulk_small, rng):
-    """
-    Test anisotropic deformation operation.
-    """
+    """Test anisotropic deformation operation."""
     strain_operation = AnisotropicDeformation(max_value=1 / 3)
     context = DeformationContext(bulk_small, rng=rng)
 
@@ -62,9 +58,7 @@ def test_anisotropic_deformation(bulk_small, rng):
 
 
 def test_shape_deformation(bulk_small, rng):
-    """
-    Test the shape deformation operation.
-    """
+    """Test the shape deformation operation."""
     strain_operation = ShapeDeformation(max_value=1 / 3)
     context = DeformationContext(bulk_small, rng=rng)
 

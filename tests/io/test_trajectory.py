@@ -12,6 +12,7 @@ from quansino.moves.exchange import ExchangeMove
 
 
 def test_trajectory_observer(bulk_small, tmp_path):
+    """Test the `TrajectoryObserver` class for saving simulation trajectory."""
     mc = GrandCanonical(
         bulk_small,
         exchange_atoms=Atoms("Cu"),

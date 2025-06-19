@@ -16,7 +16,7 @@ from quansino.utils.moves import MoveStorage
 
 
 def test_canonical(bulk_small, tmp_path):
-    """Test that the Canonical class works as expected."""
+    """Test the `Canonical` class."""
     move = DisplacementMove[Ball, DisplacementContext](
         np.arange(len(bulk_small)), Ball(1.0)
     )
@@ -143,7 +143,7 @@ def test_canonical(bulk_small, tmp_path):
 
 
 def test_canonical_restart(bulk_small, tmp_path):
-    """Test that the Canonical class restart works as expected."""
+    """Test the `Canonical` class with restart functionality."""
     move = DisplacementMove(np.arange(len(bulk_small)), Ball(0.1))
 
     mc = Canonical(

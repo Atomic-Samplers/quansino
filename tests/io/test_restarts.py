@@ -9,6 +9,7 @@ from quansino.mc.isobaric import Isobaric
 
 
 def test_restart_observer(bulk_small, tmp_path):
+    """Test the `RestartObserver` class for saving and loading simulation state."""
     mc = Isobaric(bulk_small, pressure=1.0, temperature=300.0)
 
     restart_observer = RestartObserver(

@@ -7,7 +7,7 @@ from quansino.moves.core import BaseMove
 
 
 def test_base_move(bulk_small, rng):
-    """Test the BaseMove class."""
+    """Test the `BaseMove` class."""
 
     move = BaseMove(DummyOperation(), apply_constraints=True)
     assert move.max_attempts == 10000

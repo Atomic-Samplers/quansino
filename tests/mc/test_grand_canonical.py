@@ -23,6 +23,7 @@ from quansino.utils.moves import MoveStorage
 
 
 def test_grand_canonical(bulk_large):
+    """Test the `GrandCanonical` class."""
     bulk_large.calc = EMT()
 
     energy_full = bulk_large.get_potential_energy()
@@ -63,8 +64,6 @@ def test_grand_canonical(bulk_large):
     assert gcmc.temperature == 2000
     assert gcmc.context.temperature == 2000
 
-    # gcmc.chemical_potential = energy_difference * 1.56
-
     del bulk_large[20]
     del bulk_large[10]
     del bulk_large[5]
@@ -103,6 +102,7 @@ def test_grand_canonical(bulk_large):
 
 
 def test_grand_canonical_simulation(bulk_medium):
+    """Test the `GrandCanonical` class with a simulation."""
     energy_full = bulk_medium.get_potential_energy()
 
     del bulk_medium[0]
@@ -234,6 +234,7 @@ def test_grand_canonical_simulation(bulk_medium):
 
 
 def test_grand_canonical_atomic_simulation(empty_atoms, rng):
+    """Test the `GrandCanonical` class with single atom insertion and deletion."""
     initial_position = rng.uniform(-50, 50, (1, 3))
     exchange_atoms = Atoms("H", positions=initial_position)
 
@@ -356,6 +357,7 @@ def test_grand_canonical_atomic_simulation(empty_atoms, rng):
 
 
 def test_grand_canonical_molecular_simulation(empty_atoms, rng):
+    """Test the `GrandCanonical` class with molecular insertion and deletion."""
     exchange_atoms = molecule("H2O")
     move = ExchangeMove([])
 
@@ -439,6 +441,7 @@ def test_grand_canonical_molecular_simulation(empty_atoms, rng):
 
 
 def test_displacement_consistency_manually(bulk_small):
+    """Test that the DisplacementMove works correctly with manual state management."""
     move = DisplacementMove(np.arange(len(bulk_small)))
 
     gcmc = GrandCanonical(
@@ -466,6 +469,7 @@ def test_displacement_consistency_manually(bulk_small):
 
 
 def test_displacement_consistency_manually_2(bulk_small):
+    """Test that the DisplacementMove works correctly with manual state management."""
     move = DisplacementMove(np.arange(len(bulk_small)))
 
     gcmc = GrandCanonical(
@@ -487,6 +491,7 @@ def test_displacement_consistency_manually_2(bulk_small):
 
 
 def test_exchange_consistency_manually(empty_atoms, rng):
+    """Test that the ExchangeMove works correctly with manual state management."""
     exchange_atoms = Atoms("H", positions=[[0, 0, 0]])
 
     empty_atoms.set_cell(np.eye(3) * 100)
@@ -527,6 +532,7 @@ def test_exchange_consistency_manually(empty_atoms, rng):
 
 
 def test_grand_canonical_criteria(rng):
+    """Test the `GrandCanonicalCriteria` class."""
     context = ExchangeContext(Atoms(), rng)
     context.last_energy = 0.0
 
@@ -595,7 +601,7 @@ def test_grand_canonical_criteria(rng):
 
 
 def test_grand_canonical_restart(bulk_small, tmp_path, rng):
-    """Test that the Canonical class restart works as expected."""
+    """Test the restart functionality of the `GrandCanonical` Monte Carlo class."""
     displacement_move = DisplacementMove([0, 1, -1, -1]) + DisplacementMove(
         [2, 3, -1, -1]
     )

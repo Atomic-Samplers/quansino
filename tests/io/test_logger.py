@@ -13,6 +13,7 @@ from quansino.io import Logger
 
 
 def test_logger():
+    """Test the `Logger` class."""
     string_io = StringIO()
 
     logger = Logger(string_io, interval=1)
@@ -41,6 +42,7 @@ def test_logger():
 
 
 def test_opt_custom_logger(bulk_small):
+    """Test the `Logger` class with custom fields."""
     bulk_small.rattle(0.01)
 
     string_io = StringIO()
@@ -98,6 +100,7 @@ BFGS                        4     -14.1596       0.0022                  False  
 
 
 def test_ase_md_logger(bulk_small):
+    """Test the `Logger` class with ASE MD simulation."""
     string_io = StringIO()
     logger = Logger(string_io, interval=1)
 
@@ -122,9 +125,10 @@ def test_ase_md_logger(bulk_small):
 
 
 def test_stress_logger(bulk_small):
+    """Test the `Logger` class with stress fields."""
     bulk_small.rattle(0.1)
 
-    bulk_small.calc = EMT()  # switch to EMT for stress calculation
+    bulk_small.calc = EMT()  # Stress
 
     string_io = StringIO()
     logger = Logger(string_io, interval=1)

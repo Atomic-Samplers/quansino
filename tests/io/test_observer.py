@@ -9,7 +9,8 @@ from tests.conftest import DummyStream
 from quansino.io.core import Observer, TextObserver
 
 
-def test_observers(tmp_path) -> None:
+def test_observers(tmp_path):
+    """Test the `Observer` and `TextObserver` classes."""
     observer = Observer(interval=1)
     assert observer.interval == 1
 
@@ -56,14 +57,11 @@ def test_observers(tmp_path) -> None:
 
 
 def test_text_observer_repr() -> None:
-    class DummyFile:
-        def __init__(self, *args, **kwargs):
-            self.read = lambda: True
-
-    observer = TextObserver(DummyFile("weird_file.wrd"), interval=1)  # type: ignore
+    """Test the `__repr__` method of the `TextObserver` class."""
+    observer = TextObserver(DummyStream(), interval=1)  # type: ignore
     assert (
         repr(observer)
-        == "TextObserver(Class:DummyFile, mode=a, encoding=utf-8, interval=1)"
+        == "TextObserver(Class:DummyStream, mode=a, encoding=utf-8, interval=1)"
     )
 
     text_observer = TextObserver(file=Path("weird_file.wrd"), interval=1)

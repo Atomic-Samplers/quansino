@@ -8,6 +8,7 @@ from quansino.operations import Ball, BaseOperation, Box, Sphere, Translation
 
 
 def test_composite_operations(single_atom, rng):
+    """Test the `CompositeOperation` class."""
     context = DisplacementContext(single_atom, rng)
 
     sphere = Sphere(0.1)
@@ -81,6 +82,7 @@ def test_composite_operations(single_atom, rng):
 
 
 def test_composite_operations_to_dict():
+    """Test the `CompositeOperation` serialization."""
     sphere = Sphere(0.1)
     box = Box(0.1)
     translation = Translation()

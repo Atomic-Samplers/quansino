@@ -9,6 +9,7 @@ from quansino.operations.cell import IsotropicDeformation
 
 
 def test_cell_move(bulk_small, rng):
+    """Test the `CellMove` class."""
     move = CellMove(IsotropicDeformation(0.1))
 
     context = DeformationContext(bulk_small, rng=rng)

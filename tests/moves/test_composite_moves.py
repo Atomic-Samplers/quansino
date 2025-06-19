@@ -66,7 +66,7 @@ def test_composite_move(bulk_small, rng):
 
 
 def test_composite_move_type():
-
+    """Test the type of composite moves."""
     move_1 = BaseMove(DummyOperation())
     move_2 = BaseMove(DummyOperation())
 
@@ -117,6 +117,7 @@ def test_composite_move_type():
 
 
 def test_composite_displacement_move(bulk_medium, rng):
+    """Test the `CompositeDisplacementMove` class."""
     context = DisplacementContext(bulk_medium, rng)
 
     move_1 = DisplacementMove(np.arange(len(bulk_medium)), Sphere(0.1))
@@ -185,7 +186,7 @@ def test_composite_displacement_move(bulk_medium, rng):
             0
         ].shape[0]
         == 5
-    )
+    )  # type: ignore
 
     bulk_medium.positions = old_positions
     composite_move_2(context)

@@ -15,6 +15,7 @@ from quansino.registry import register_class
 
 
 def test_displacement_move(bulk_small, rng):
+    """Test the `DisplacementMove` class."""
     move = DisplacementMove[DummyOperation, DisplacementContext](
         np.arange(len(bulk_small))
     )
@@ -48,6 +49,7 @@ def test_displacement_move(bulk_small, rng):
 
 
 def test_displacement_move_2(bulk_small, rng):
+    """Test the `DisplacementMove` class with a sphere operation."""
     context = DisplacementContext(bulk_small, rng)
 
     move = DisplacementMove(np.arange(len(bulk_small)), Sphere(0.1))
@@ -103,6 +105,7 @@ def test_displacement_move_2(bulk_small, rng):
 
 
 def test_displacement_move_3(bulk_small, rng):
+    """Test the `DisplacementMove` class with a Box operation."""
     context = DisplacementContext(bulk_small, rng)
 
     move = DisplacementMove(np.arange(len(bulk_small)), Box(0.1))
@@ -141,6 +144,7 @@ def test_displacement_move_3(bulk_small, rng):
 
 
 def test_displacement_move_molecule(rng):
+    """Test the `DisplacementMove` class with a molecule."""
     water = molecule("H2O", vacuum=10)
 
     context = DisplacementContext(water, rng)

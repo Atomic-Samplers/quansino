@@ -99,6 +99,9 @@ class DummySimulation:
 
 
 class DummyStream:
+    def __init__(self, *args, **kwargs):
+        self.closed = False
+
     def read(self, *args, **kwargs):
         pass
 

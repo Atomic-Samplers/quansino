@@ -18,6 +18,7 @@ from quansino.operations.displacement import DisplacementOperation
 
 
 def test_mc_class(bulk_small):
+    """Test the `MonteCarlo` class."""
     mc = MonteCarlo(bulk_small, seed=42)
 
     assert mc._MonteCarlo__seed == 42  # type: ignore
@@ -62,6 +63,7 @@ def test_mc_class(bulk_small):
 
 
 def test_mc_yield_moves(bulk_small):
+    """Test the `yield_moves` method of the `MonteCarlo` class."""
     mc = MonteCarlo(bulk_small, seed=42)
 
     assert list(mc.yield_moves()) == []
@@ -142,6 +144,7 @@ def test_mc_yield_moves(bulk_small):
 
 
 def test_mc_logger(bulk_small, tmp_path):
+    """Test the `Logger` class and its integration with `MonteCarlo`."""
     import sys
 
     mc = MonteCarlo(bulk_small, seed=42, logfile=sys.stdout, logging_interval=1)
@@ -252,6 +255,7 @@ def test_mc_logger(bulk_small, tmp_path):
 
 
 def test_mc_serialization_deserialization(bulk_small):
+    """Test the serialization and deserialization of the `MonteCarlo` class."""
     mc = MonteCarlo(bulk_small, seed=42)
 
     dict_atoms = mc.atoms.copy()
