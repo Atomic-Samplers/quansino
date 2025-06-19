@@ -1,64 +1,62 @@
 """
 Module for type hints.
 
-This module provides type hints for various data structures used throughout the quansino package.
-These type hints help ensure type safety and improve code readability by clearly defining
-the expected data types and structures.
+This module provides semantic type hints for various data structures used throughout the quansino package. These type aliases improve code readability by clearly defining the expected data types, their intended scientific meaning, and their expected shapes.
 
-Examples
---------
-``` python
-from quansino.type_hints import Positions, Forces, Cell
-
-positions: Positions = np.zeros((100, 3))
-forces: Forces = np.random.random((100, 3))
-cell: Cell = np.eye(3) * 10.0
-```
+Note
+----
+Current Python type checkers cannot enforce numpy array shape constraints. These type hints provide semantic clarity and documentation until native shape typing becomes available in future Python versions without relying on third-party libraries.
 """
 
 from __future__ import annotations
 
-from numpy import dtype, floating, integer, ndarray
+from numpy import floating, integer
+from numpy.typing import NDArray
 
-IntegerArray = list[int] | tuple[int] | ndarray[tuple[int], dtype[integer]]
-"""Type hint for an array of integers."""
+type IntegerArray = list[int] | tuple[int] | NDArray[integer]
+"""1D-Array of integers with shape (N,)."""
 
-AtomicNumbers = ndarray[tuple[int], dtype[integer]]
-"""Type hint for an array of atomic numbers."""
+type AtomicNumbers = NDArray[integer]
+"""1D-Array of atomic numbers with shape (N,)."""
 
-Cell = ndarray[tuple[3, 3], dtype[floating]]
-"""Type hint for a 3x3 array of floating point numbers representing a cell."""
+type UnitCell = NDArray[floating]
+"""2D-Array representing a cell matrix with shape (3, 3)."""
 
-Connectivity = ndarray[tuple[int, int], dtype[integer]]
-"""Type hint for an array of integer pairs representing atom connectivity."""
+type AdjacencyMatrix = NDArray[integer]
+"""2D-Array representing an adjacency matrix with shape (N, N)."""
 
-Displacement = (
-    ndarray[tuple[3], dtype[floating]] | ndarray[tuple[1, 3], dtype[floating]]
-)
-"""Type hint for a 3D displacement vector."""
+type Displacement = NDArray[floating]
+"""2D-Array representing a displacement vector with shape (3,) or (1, 3)."""
 
-Center = list[float] | tuple[float] | ndarray[tuple[3], dtype[floating]]
-"""Type hint for a 3D center point."""
+type Displacements = NDArray[floating]
+"""2D-Array of displacements with shape (N, 3)."""
 
-Strain = ndarray[tuple[6], dtype[floating]]
-"""Type hint for a 6-element array of floating point numbers representing a strain tensor."""
+type Center = list[float] | tuple[float] | NDArray[floating]
+"""1D-Array representing center point with shape (3,)."""
 
-Stress = ndarray[tuple[6], dtype[floating]]
-"""Type hint for a 6-element array of floating point numbers representing a stress tensor."""
+type Strain = NDArray[floating]
+"""Array representing a strain tensor with shape (6,) or (3, 3)."""
 
-Forces = ndarray[tuple[int, 3], dtype[floating]]
-"""Type hint for an array of 3D force vectors."""
+type Stress = NDArray[floating]
+"""Array representing a stress tensor with shape (6,) or (3, 3)."""
 
-Positions = ndarray[tuple[int, 3], dtype[floating]]
-"""Type hint for an array of 3D positions."""
+type Deformation = NDArray[floating]
+"""2D-Array representing a deformation gradient tensor with shape (3, 3)."""
 
-Momenta = ndarray[tuple[int, 3], dtype[floating]]
-"""Type hint for an array of 3D momenta."""
+type Forces = NDArray[floating]
+"""2D-Array of forces with shape (N, 3)."""
 
-Velocities = ndarray[tuple[int, 3], dtype[floating]]
-"""Type hint for an array of 3D velocities."""
+type Positions = NDArray[floating]
+"""2D-Array of atomic positions with shape (N, 3)."""
 
-Masses = ndarray[tuple[int], dtype[floating]]
-"""Type hint for an array of masses."""
+type Momenta = NDArray[floating]
+"""2D-Array of momenta with shape (N, 3)."""
 
-ShapedMasses = ndarray[tuple[int, 3], dtype[floating]]
+type Velocities = NDArray[floating]
+"""2D-Array representing velocities with shape (N, 3)."""
+
+type Masses = NDArray[floating]
+"""1D-Array of masses with shape (N,)."""
+
+type ShapedMasses = NDArray[floating]
+"""2D-Array of masses with shape (N, 3)."""

@@ -4,14 +4,14 @@ from typing import TYPE_CHECKING, Any
 
 import numpy as np
 
-from quansino.operations.core import Operation
+from quansino.operations.core import BaseOperation
 
 if TYPE_CHECKING:
     from quansino.mc.contexts import DisplacementContext
     from quansino.type_hints import Displacement
 
 
-class DisplacementOperation(Operation):
+class DisplacementOperation(BaseOperation):
     """
     Base class for displacement operations.
 
@@ -25,6 +25,8 @@ class DisplacementOperation(Operation):
     step_size : float
         The step size for the displacement operation.
     """
+
+    __slots__ = ("step_size",)
 
     def __init__(self, step_size: float = 1.0) -> None:
         self.step_size = step_size
@@ -61,7 +63,7 @@ class Box(DisplacementOperation):
     """
 
     def calculate(self, context: DisplacementContext) -> Displacement:
-        return context.rng.uniform(-self.step_size, self.step_size, size=(1, 3))
+        return context.rng.uniform(-self.step_size, self.step_size, size=(1, 3))  # type: ignore
 
 
 class Sphere(DisplacementOperation):
@@ -102,7 +104,7 @@ class Sphere(DisplacementOperation):
 
         return self.step_size * np.column_stack(
             (sin_theta * np.cos(phi), sin_theta * np.sin(phi), cos_theta)
-        )
+        )  # type: ignore
 
 
 class Ball(DisplacementOperation):
@@ -145,10 +147,10 @@ class Ball(DisplacementOperation):
 
         return np.column_stack(
             (r * sin_theta * np.cos(phi), r * sin_theta * np.sin(phi), r * cos_theta)
-        )
+        )  # type: ignore
 
 
-class Translation(Operation):
+class Translation(BaseOperation):
     """
     Class for a translation operation.
 
@@ -166,11 +168,11 @@ class Translation(Operation):
         atoms = context.atoms
 
         return context.rng.uniform(0, 1, (1, 3)) @ atoms.cell.array - atoms.positions[
-            context.moving_indices
+            context._moving_indices
         ].mean(axis=0)
 
 
-class Rotation(Operation):
+class Rotation(BaseOperation):
     """
     Class for a rotation operation.
 
@@ -187,14 +189,14 @@ class Rotation(Operation):
     def calculate(self, context: DisplacementContext) -> Displacement:
         atoms = context.atoms
 
-        molecule = atoms[context.moving_indices]
+        molecule = atoms[context._moving_indices]
         phi, theta, psi = context.rng.uniform(0, 2 * np.pi, 3)
         molecule.euler_rotate(phi, theta, psi, center="COM")  # type: ignore
 
-        return molecule.positions - context.atoms.positions[context.moving_indices]  # type: ignore
+        return molecule.positions - context.atoms.positions[context._moving_indices]  # type: ignore
 
 
-class TranslationRotation(Operation):
+class TranslationRotation(BaseOperation):
     """
     Class to perform both translation and rotation operations on atoms.
 
@@ -219,4 +221,4 @@ class TranslationRotation(Operation):
         self.rotation = Rotation()
 
     def calculate(self, context: DisplacementContext) -> Displacement:
-        return self.translation.calculate(context) + self.rotation.calculate(context)
+        return self.translation.calculate(context) + self.rotation.calculate(context)  # type: ignore

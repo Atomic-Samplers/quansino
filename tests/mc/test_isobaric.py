@@ -5,11 +5,11 @@ from ase.calculators.calculator import compare_atoms
 from ase.units import bar
 from numpy.testing import assert_allclose, assert_array_equal
 
-from quansino.mc.contexts import StrainContext
-from quansino.mc.criteria import Criteria
+from quansino.mc.contexts import DeformationContext
+from quansino.mc.criteria import BaseCriteria
 from quansino.mc.isobaric import Isobaric
 from quansino.moves import CellMove, DisplacementMove
-from quansino.operations.cell import IsotropicVolume
+from quansino.operations.cell import IsotropicDeformation
 from quansino.operations.displacement import Ball
 
 
@@ -21,13 +21,13 @@ def test_isobaric(bulk_small, rng, tmp_path):
         pressure=1.0 * bar,
         max_cycles=10,
         default_displacement_move=DisplacementMove([0, 1, 2, 3], Ball(0.1), rng),
-        default_cell_move=CellMove(IsotropicVolume(0.05), rng),
+        default_cell_move=CellMove(IsotropicDeformation(0.05), rng),
         logfile=tmp_path / "mc.log",
         trajectory=tmp_path / "mc.traj",
     )
 
-    class DummyCriteria(Criteria):
-        def evaluate(self, context: StrainContext) -> bool:
+    class DummyCriteria(BaseCriteria):
+        def evaluate(self, context: DeformationContext) -> bool:
             return context.rng.random() < 0.5
 
     mc.moves["default_displacement_move"].criteria = DummyCriteria()
@@ -38,10 +38,15 @@ def test_isobaric(bulk_small, rng, tmp_path):
     assert mc.pressure == 1.0 * bar
     assert mc.max_cycles == 10
 
-    assert isinstance(mc.context, StrainContext)
+    assert isinstance(mc.context, DeformationContext)
+
+    assert isinstance(mc.moves["default_displacement_move"].move, DisplacementMove)
+    assert isinstance(mc.moves["default_cell_move"].move, CellMove)
 
     assert isinstance(mc.moves["default_displacement_move"].move.operation, Ball)
-    assert isinstance(mc.moves["default_cell_move"].move.operation, IsotropicVolume)
+    assert isinstance(
+        mc.moves["default_cell_move"].move.operation, IsotropicDeformation
+    )
 
     assert mc.moves["default_cell_move"].probability == 1 / (len(bulk_small) + 1)
     assert mc.moves["default_displacement_move"].probability == 1 / (
@@ -71,13 +76,6 @@ def test_isobaric(bulk_small, rng, tmp_path):
     else:
         assert_allclose(mc.context.last_cell, old_cell)
         assert_allclose(mc.atoms.cell, old_cell)
-
-    if "default_displacement_move" in accepted_moves:
-        assert not np.allclose(mc.context.last_positions, old_positions)
-        assert not np.allclose(mc.atoms.get_positions(), old_positions)
-    else:
-        assert_allclose(mc.context.last_positions, old_positions)
-        assert_allclose(mc.atoms.get_positions(), old_positions)
 
     assert_allclose(mc.context.last_positions, mc.atoms.get_positions())
     assert_allclose(mc.context.last_cell, mc.atoms.cell)

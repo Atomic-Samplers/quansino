@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import IO, TYPE_CHECKING, Any
+from weakref import proxy
 
 from ase.io.extxyz import write_xyz
 
@@ -14,6 +15,8 @@ from quansino.io.core import TextObserver
 
 class TrajectoryObserver(TextObserver):
 
+    __slots__ = ("atoms", "write_kwargs")
+
     def __init__(
         self,
         atoms: Atoms,
@@ -24,36 +27,29 @@ class TrajectoryObserver(TextObserver):
         **observer_kwargs: Any,
     ) -> None:
         """
-        Initialize the Trajectory observer with a trajectory file, mode, and other parameters.
+        Initialize the `TrajectoryObserver` with mode, and other parameters. In `quansino`, trajectory files are written in the XYZ format using ASE's `write_xyz` function.
 
         Parameters
         ----------
-        trajectory_file : IO | str | Path
-            The trajectory file to write to.
-        mode : str
-            The mode in which to open the file (e.g., 'a' for append).
-        communicator : Any
-            The communicator to use for parallel processing, if applicable.
-        function : Callable
-            The function to call when writing to the file.
-        function_kwargs : dict[str, Any] | None
-            Additional keyword arguments to pass to the function.
+        atoms : Atoms
+            The ASE Atoms object to write to the trajectory file.
+        file : IO | str | Path
+            The file or path to the trajectory file.
+        interval : int, optional
+            The interval at which to write the trajectory, by default 1.
+        mode : str, optional
+            The mode in which to open the file (e.g., 'a' for append), by default "a".
+        write_kwargs : dict[str, Any] | None, optional
+            Additional keyword arguments to pass to the writing function, by default None.
+        **observer_kwargs : Any
+            Additional keyword arguments for the observer class.
         """
         super().__init__(file=file, interval=interval, mode=mode, **observer_kwargs)
 
-        self.atoms = atoms
+        self.atoms = proxy(atoms)
         self.write_kwargs = write_kwargs or {}
 
     def __call__(self) -> None:
-        """
-        Call the function to write the trajectory to the file.
-
-        Parameters
-        ----------
-        *args : Any
-            Positional arguments to pass to the function.
-        **kwargs : Any
-            Keyword arguments to pass to the function.
-        """
+        """Call the function to write the trajectory to the file."""
         write_xyz(self._file, images=self.atoms, **self.write_kwargs)
         self._file.flush()

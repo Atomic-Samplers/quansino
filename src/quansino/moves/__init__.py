@@ -5,13 +5,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from quansino.moves.cell import CellMove
-from quansino.moves.core import BaseMove, CompositeMove
+from quansino.moves.composite import CompositeMove
+from quansino.moves.core import BaseMove
 from quansino.moves.displacement import CompositeDisplacementMove, DisplacementMove
 from quansino.moves.exchange import ExchangeMove
 from quansino.registry import register_class
 
 if TYPE_CHECKING:
-    from quansino.moves.protocol import BaseProtocol
+    from quansino.protocols import Move
 
 __all__ = [
     "BaseMove",
@@ -21,7 +22,7 @@ __all__ = [
     "ExchangeMove",
 ]
 
-moves_registry: dict[str, type[BaseProtocol]] = {
+moves_registry: dict[str, type[Move]] = {
     "BaseMove": BaseMove,
     "CellMove": CellMove,
     "CompositeMove": CompositeMove,

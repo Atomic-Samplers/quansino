@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from copy import deepcopy
-from dataclasses import dataclass
 from typing import IO, TYPE_CHECKING, ClassVar, Final, Self, cast
 from warnings import warn
 
@@ -12,14 +11,13 @@ import numpy as np
 from numpy.random import PCG64
 from numpy.random import Generator as RNG
 
-from quansino.io.file import FileManager
-from quansino.io.logger import Logger
-from quansino.io.restart import RestartObserver
-from quansino.io.trajectory import TrajectoryObserver
 from quansino.mc.contexts import Context
-from quansino.mc.criteria import Criteria
-from quansino.moves.protocol import BaseProtocol
+from quansino.mc.criteria import BaseCriteria
+from quansino.mc.driver import Driver
+from quansino.moves.core import BaseMove
+from quansino.protocols import Criteria, Move
 from quansino.registry import get_typed_class
+from quansino.utils.moves import MoveStorage
 
 if TYPE_CHECKING:
     from collections.abc import Generator
@@ -28,301 +26,65 @@ if TYPE_CHECKING:
 
     from ase.atoms import Atoms
 
-    from quansino.io.core import Observer
+    from quansino.io.logger import Logger
+    from quansino.io.restart import RestartObserver
+    from quansino.io.trajectory import TrajectoryObserver
 
 
-class Driver:
+class MonteCarlo[MoveType: Move, CriteriaType: Criteria](Driver):
     """
-    Base class for all Monte Carlo drivers. This class is not intended to be used directly, but rather as a base class for other Monte Carlo classes. It provides the basic functionality for running a Monte Carlo simulation, including the ability to attach a calculator to the atoms object, and to write the results to a file.
-    """
-
-    def __init__(
-        self,
-        atoms: Atoms,
-        logfile: Logger | IO | Path | str | None = None,
-        trajectory: TrajectoryObserver | Path | str | None = None,
-        restart_file: RestartObserver | Path | str | None = None,
-        logging_interval: int = 1,
-        logging_mode: str = "a",
-    ) -> None:
-        """
-        Dynamics object.
-
-        Parameters
-        ----------
-        atoms : Atoms object
-            The Atoms object to operate on.
-
-        logfile : file object or str
-            If *logfile* is a string, a file with that name will be opened.
-            Use '-' for stdout.
-
-        trajectory : Trajectory object or str
-            Attach trajectory object.  If *trajectory* is a string a
-            Trajectory will be constructed.  Use *None* for no
-            trajectory.
-
-        append_trajectory : bool
-            Defaults to False, which causes the trajectory file to be
-            overwriten each time the dynamics is restarted from scratch.
-            If True, the new structures are appended to the trajectory
-            file instead.
-
-        master : bool
-            Defaults to None, which causes only rank 0 to save files. If set to
-            true, this rank will save files.
-
-        comm : Communicator object
-            Communicator to handle parallel file reading and writing.
-
-        loginterval : int, default: 1
-            Only write a log line for every *loginterval* time steps.
-        """
-        self.atoms = atoms
-
-        self.observers: dict[str, Observer] = {}
-
-        self.logging_interval = logging_interval
-        self.logging_mode = logging_mode
-
-        self.step_count: int = 0
-        self.max_steps: int = 0
-
-        self.file_manager: Final = FileManager()
-
-        self.default_logger = logfile
-        self.default_trajectory = trajectory
-        self.default_restart = restart_file
-
-    def attach_observer(self, name: str, observer: Observer):
-        """
-        Attach callback function.
-
-        If *interval > 0*, at every *interval* steps, call *function* with
-        arguments *args* and keyword arguments *kwargs*.
-
-        If *interval <= 0*, after step *interval*, call *function* with
-        arguments *args* and keyword arguments *kwargs*.  This is
-        currently zero indexed."""
-
-        observer.attach_simulation(self.file_manager)
-        self.observers[name] = observer
-
-    def detach_observer(self, name: str) -> None:
-        """Detach callback function."""
-        if self.observers.pop(name, None) is None:
-            warn(f"`Observer` '{name}' not found when deleting.", UserWarning, 2)
-
-    def call_observers(self) -> None:
-        for observer in self.observers.values():
-            interval = observer.interval
-            if (interval > 0 and self.step_count % interval == 0) or (
-                interval < 0 and self.step_count == abs(interval)
-            ):
-                observer()
-
-    def validate_simulation(self) -> None:
-        """Validate the simulation object by checking if the atoms object has a calculator attached to it."""
-        if self.atoms.calc is None:
-            raise AttributeError("Atoms object must have a calculator attached to it.")
-        if not hasattr(self.atoms.calc, "results"):
-            raise AttributeError("Calculator object must have a results attribute.")
-
-        self.atoms.get_potential_energy()
-
-    def irun(self, steps=100_000_000) -> Generator[Any, None, None]:
-        """
-        Run the Monte Carlo simulation for a given number of steps.
-
-        Returns
-        -------
-        Generator[bool, None, None]
-            Generator that yields True if the simulation is converged.
-        """
-        self.validate_simulation()
-        self.max_steps = self.step_count + steps
-
-        if self.step_count == 0:
-            if self.default_logger:
-                self.default_logger.write_header()
-
-            self.call_observers()
-
-        while not self.converged():
-
-            yield self.step()
-            self.step_count += 1
-
-            self.atoms.get_potential_energy()
-            self.call_observers()
-
-    def run(self, steps=100_000_000) -> None:
-        """
-        Run the Monte Carlo simulation for a given number of steps.
-        """
-        for _ in self.irun(steps):
-            pass
-
-    def step(self) -> Any: ...
-
-    def converged(self) -> bool:
-        """
-        The Monte Carlo simulation is 'converged' when number of maximum steps is reached.
-
-        Returns
-        -------
-        bool
-            True if the maximum number of steps is reached.
-        """
-        return self.step_count >= self.max_steps
-
-    def to_dict(self) -> dict[str, Any]:
-        """
-        Return a dictionary representation of the Driver object.
-
-        Returns
-        -------
-        dict[str, Any]
-            A dictionary representation of the Driver object.
-        """
-        return {
-            "name": self.__class__.__name__,
-            "atoms": self.atoms.copy(),
-            "kwargs": {
-                "logging_interval": self.logging_interval,
-                "logging_mode": self.logging_mode,
-            },
-            "attributes": {"step_count": self.step_count},
-        }
-
-    @property
-    def default_trajectory(self) -> TrajectoryObserver | None:
-        """Return the trajectory object."""
-        return self._default_trajectory
-
-    @default_trajectory.setter
-    def default_trajectory(
-        self, default_trajectory: TrajectoryObserver | IO | Path | str | None
-    ) -> None:
-        """Set the trajectory object."""
-        if default_trajectory is None:
-            self._default_trajectory = None
-            return
-
-        if not isinstance(default_trajectory, TrajectoryObserver):
-            self._default_trajectory = TrajectoryObserver(
-                atoms=self.atoms,
-                file=default_trajectory,
-                interval=self.logging_interval,
-                mode=self.logging_mode,
-            )
-        else:
-            self._default_trajectory = default_trajectory
-
-        self.attach_observer("default_trajectory", self._default_trajectory)
-
-    @property
-    def default_logger(self) -> Logger | None:
-        return self._default_logger
-
-    @default_logger.setter
-    def default_logger(self, default_logger: Logger | IO | Path | str | None) -> None:
-        """Set the default logger object."""
-        if default_logger is None:
-            self._default_logger = None
-            return
-
-        if not isinstance(default_logger, Logger):
-            self._default_logger = Logger(
-                logfile=default_logger,
-                interval=self.logging_interval,
-                mode=self.logging_mode,
-            )
-        else:
-            self._default_logger = default_logger
-
-        self.attach_observer("default_logger", self._default_logger)
-
-    @property
-    def default_restart(self) -> RestartObserver | None:
-        """Return the restart file object."""
-        return self._default_restart
-
-    @default_restart.setter
-    def default_restart(
-        self, restart_observer: RestartObserver | IO | Path | str | None
-    ) -> None:
-        """Set the restart file object."""
-        if restart_observer is None:
-            self._default_restart = None
-            return
-
-        if not isinstance(restart_observer, RestartObserver):
-            self._default_restart = RestartObserver(
-                simulation=self,
-                file=restart_observer,
-                interval=self.logging_interval,
-                mode=self.logging_mode,
-            )
-        else:
-            self._default_restart = restart_observer
-
-        self.attach_observer("default_restart", self._default_restart)
-
-        self._default_restart()
-
-    def close(self) -> None:
-        """Helper function to close the `FileManager` instance."""
-        self.file_manager.close()
-
-
-class MonteCarlo[MoveProtocol: BaseProtocol, ContextType: Context](Driver):
-    """
-    Base-class for all Monte Carlo classes. This is a common interface for all Monte Carlo classes, and
-    is not intended to be used directly. It is a subclass of the ASE Dynamics class,
-    and inherits all of its methods and attributes. The Monte Carlo class is responsible for selecting moves to perform via the [`yield_moves`][quansino.mc.core.MonteCarlo.yield_moves] method. This class is also responsible for managing the moves, their parameters (interval, probability, minimum count), and their acceptance criteria. Logging and trajectory writing are managed by the ASE parent class, Dynamics. When necessary, communication between the Monte Carlo simulation and the moves is facilitated by the context object. The Monte Carlo class and its subclasses should NOT directly modify the moves, but rather interact using the context object.
+    Base class providing an interface for all Monte Carlo classes. The `MonteCarlo` class is responsible for selecting moves to perform via the [`yield_moves`][quansino.mc.core.MonteCarlo.yield_moves] method. This class is also responsible for managing the moves, their parameters (interval, probability, minimum count), and their acceptance criteria. Logging and trajectory writing are handled by the parent [`Driver`][quansino.mc.driver.Driver] class. When necessary, communication between the Monte Carlo simulation and the moves is facilitated by the context object. The Monte Carlo class and its subclasses should not directly modify the moves, but rather interact using the context object.
 
     Parameters
     ----------
     atoms: Atoms
         The Atoms object to operate on.
-    max_cycles: int
-        Number of Monte Carlo cycles per step.
-    seed: int
-        Seed for the random number generator.
-    trajectory: str | Path | None
-        Trajectory file name to auto-attach.
-    logfile: str | Path | None
-        Log file name to auto-attach. Use '-' for stdout.
-    append_trajectory: bool
-        If false, causes the trajectory file to be
-        overwriten each time the dynamics is restarted from scratch.
-        If True, the new structures are appended to the trajectory
-        file instead.
-    log_interval: int
-        Number of steps between log entries.
+    max_cycles: int, optional
+        Number of Monte Carlo cycles per step, by default 1.
+    seed: int | None, optional
+        Seed for the random number generator, by default None. If None, a random seed is generated.
+    logfile: Logger | IO | Path | str | None, optional
+        Logger observer to auto-attach, by default None.
+    trajectory: TrajectoryObserver | IO | Path | str | None, optional
+        Trajectory observer to auto-attach, by default None.
+    restart_file: RestartObserver | IO | Path | str | None, optional
+        Restart observer to auto-attach, by default None.
+    logging_interval: int, optional
+        Interval at which to call the observers, by default 1.
+    logging_mode: str, optional
+        Mode in which to open the observers, by default "a".
 
     Attributes
     ----------
-    moves: dict[str, MoveStorage[MoveProtocol]]
-        Dictionary of moves to perform.
+    __seed: Final[int]
+        The seed used for the random number generator, initialized to a random value if not provided.
     _rng: Generator
         Random number generator.
-    max_cycles: int
-        Number of Monte Carlo cycles per step.
-    current_yield_index: int
-        Current index of the yield_moves generator.
+    acceptance_rate: float
+        The acceptance rate of the moves in the simulation, initialized to 0.0.
+    context: Context
+        Context object for the simulation used to store the state of the simulation and provide information to the moves/criteria.
     default_logger: Logger | None
         Default logger object.
-    context: ContextType
-        Context object for the simulation used to store the state of the simulation and provide information to the moves/criteria.
-    default_criteria: ClassVar[dict[type[BaseProtocol], type[Criteria]]]
+    default_criteria: ClassVar[dict[type[MoveProtocol], type[Criteria]]]
         Dictionary mapping move types to their default criteria classes.
     default_context: ClassVar[type[Context]]
         The default context type for this Monte Carlo simulation.
+    last_results: dict[str, Any]
+        The last results of the simulation, typically the calculator results from the Atoms object.
+    max_cycles: int
+        Number of Monte Carlo cycles per step.
+    move_history: list[tuple[str, bool | None]]
+        History of moves performed in the current step, where each entry is a tuple of the move name and whether it was accepted (True), rejected (False), or not attempted (None).
+    moves: dict[str, MoveStorage[MoveType, CriteriaType]]
+        A dictionary of moves to perform, where the key is the name of the move and the value is a `MoveStorage` object containing the move, its criteria, interval, probability, and minimum count.
+    step_count: int
+        The number of steps performed in the simulation, initialized to 0.
     """
 
-    default_criteria: ClassVar[dict[type[BaseProtocol], type[Criteria]]] = {}
+    default_criteria: ClassVar[dict[type[Move], type[Criteria]]] = {
+        BaseMove: BaseCriteria
+    }
     default_context: ClassVar[type[Context]] = Context
 
     def __init__(
@@ -331,13 +93,13 @@ class MonteCarlo[MoveProtocol: BaseProtocol, ContextType: Context](Driver):
         max_cycles: int = 1,
         seed: int | None = None,
         logfile: Logger | IO | Path | str | None = None,
-        trajectory: TrajectoryObserver | Path | str | None = None,
-        restart_file: RestartObserver | Path | str | None = None,
+        trajectory: TrajectoryObserver | IO | Path | str | None = None,
+        restart_file: RestartObserver | IO | Path | str | None = None,
         logging_interval: int = 1,
         logging_mode: str = "a",
     ) -> None:
         """Initialize the MonteCarlo object."""
-        self.moves: dict[str, MoveStorage[MoveProtocol]] = {}
+        self.moves: dict[str, MoveStorage[MoveType, CriteriaType]] = {}
 
         self.__seed: Final = seed or PCG64().random_raw()
         self._rng = RNG(PCG64(self.__seed))
@@ -346,9 +108,10 @@ class MonteCarlo[MoveProtocol: BaseProtocol, ContextType: Context](Driver):
 
         self.last_results: dict[str, Any] = {}
 
+        self.acceptance_rate = 0.0
         self.move_history: list[tuple[str, bool | None]] = []
 
-        self.context = self.create_context(atoms, self._rng)
+        self.context = self.default_context(atoms, self._rng)
 
         super().__init__(
             atoms,
@@ -364,30 +127,30 @@ class MonteCarlo[MoveProtocol: BaseProtocol, ContextType: Context](Driver):
 
     def add_move(
         self,
-        move: MoveProtocol | MoveStorage[MoveProtocol],
-        criteria: Criteria | None = None,
+        move: MoveType,
+        criteria: CriteriaType | None = None,
         name: str = "default",
         interval: int = 1,
         probability: float = 1.0,
         minimum_count: int = 0,
     ) -> None:
         """
-        Add a move to the Monte Carlo object.
+        Add a move to the `MonteCarlo` object.
 
         Parameters
         ----------
-        move : MoveProtocol
-            The move to add to the Monte Carlo object.
-        criteria : Criteria, optional
-            The acceptance criteria for the move. If none, the move must be an instance of a known move type.
-        name : str
-            Name of the move.
-        interval : int
-            The interval at which the move is attempted.
-        probability : float
-            The probability of the move being attempted.
-        minimum_count : int
-            The minimum number of times the move must be performed.
+        move : MoveType
+            The move to add to the `MonteCarlo` object.
+        criteria : CriteriaType | None, optional
+            The acceptance criteria for the move, by default None. If None, the move must be an instance of a known move type.
+        name : str, optional
+            Name of the move, used to identify the move in the `moves` dictionary, by default "default".
+        interval : int, optional
+            The interval at which the move is attempted, by default 1.
+        probability : float, optional
+            The probability of the move being attempted, by default 1.0.
+        minimum_count : int, optional
+            The minimum number of times the move must be performed, by default 0.
         """
         forced_moves_count = sum(
             [self.moves[name].minimum_count for name in self.moves]
@@ -396,62 +159,90 @@ class MonteCarlo[MoveProtocol: BaseProtocol, ContextType: Context](Driver):
         if forced_moves_count + minimum_count > self.max_cycles:
             raise ValueError("The number of forced moves exceeds the number of cycles.")
 
-        if not isinstance(move, MoveStorage):
-            if criteria is None:
-                for acceptable_move in self.default_criteria:
-                    if isinstance(move, acceptable_move):
-                        criteria = self.default_criteria[acceptable_move]()
-                        break
+        if criteria is None:
+            for move_type in self.default_criteria:
+                if isinstance(move, move_type):
+                    criteria = cast("CriteriaType", self.default_criteria[move_type]())
+                    break
 
-                if criteria is None:
-                    raise ValueError(
-                        "No acceptance criteria found for the move, please provide one."
-                    )
-
-            move_storage = MoveStorage[MoveProtocol](
-                move=move,
-                interval=interval,
-                probability=probability,
-                minimum_count=minimum_count,
-                criteria=criteria,
+        if criteria is None:
+            raise ValueError(
+                f"No criteria provided, and no default criteria found for move type {type(move)}."
             )
-        else:
-            move_storage = move
 
-        move_storage.move.attach_simulation(self.context)
-        self.moves[name] = move_storage
+        self.moves[name] = MoveStorage[MoveType, CriteriaType](
+            move=move,
+            criteria=criteria,
+            interval=interval,
+            probability=probability,
+            minimum_count=minimum_count,
+        )
 
-    def run_steps(self, steps=100_000_000) -> Generator[Any, None, None]:
+    def srun(self, steps=100_000_000) -> Generator[Any, None, None]:
+        """
+        Run the simulation for a given number of steps, yielding the steps.
+
+        Parameters
+        ----------
+        steps : int, optional
+            The number of steps to run the simulation for, by default 100,000,000.
+
+        Yields
+        ------
+        Generator[Any, None, None]
+            A `Generator` yielding the steps of the simulation.
+        """
         for step in self.irun(steps):
             for _ in step:
                 pass
 
             yield step
 
+    def validate_simulation(self) -> None:
+        """
+        Validate the simulation setup. Checks that moves have been added to the Monte Carlo simulation and that the Atoms object has a calculator with results.
+        """
+        if len(self.moves) == 0:
+            warn(
+                "No moves have been added to the Monte Carlo simulation. "
+                "Please add moves using the `add_move` method.",
+                UserWarning,
+                2,
+            )
+
+        try:
+            self.last_results = self.atoms.calc.results  # type: ignore[try-attr]
+        except AttributeError:
+            warn(
+                "Atoms object does not have calculator attached, or does not support the `results` attribute.",
+                UserWarning,
+                2,
+            )
+            self.last_results = {}
+
+        super().validate_simulation()
+
     def run(self, steps=100_000_000) -> None:
         """
-        Run the Monte Carlo simulation for a given number of steps.
+        Run the simulation for a given number of steps.
 
-        Returns
-        -------
-        bool
-            True if the simulation is converged.
+        Parameters
+        ----------
+        steps : int, optional
+            The number of steps to run the simulation for, by default 100,000,000.
         """
         for step in self.irun(steps):
             for _ in step:
                 pass
 
-    def create_context(self, atoms: Atoms, rng: RNG) -> ContextType:
-        return cast(ContextType, self.default_context(atoms, rng))
-
     def to_dict(self) -> dict[str, Any]:
         """
-        Return a dictionary representation of the Monte Carlo object.
+        Convert the `MonteCarlo` object to a dictionary.
 
         Returns
         -------
         dict[str, Any]
-            A dictionary representation of the Monte Carlo object.
+            A dictionary representation of the `MonteCarlo` object.
         """
         dictionary = {
             **super().to_dict(),
@@ -478,21 +269,23 @@ class MonteCarlo[MoveProtocol: BaseProtocol, ContextType: Context](Driver):
     @classmethod
     def from_dict(cls, data: dict[str, Any], **kwargs_override: Any) -> Self:
         """
-        Load the Monte Carlo object from a dictionary.
-        This method is used to restore the state of the Monte Carlo object from a saved state.
-        It is not intended to be used directly, but rather as a helper method for the `from_dict` method of the ASE Dynamics class.
+        Create a `MonteCarlo` object from a dictionary.
 
         Parameters
         ----------
         data : dict[str, Any]
-            A dictionary representation of the Monte Carlo object.
+            The dictionary representation of the object.
+        **kwargs_override : Any
+            Additional keyword arguments to override the ones in the dictionary.
 
         Returns
         -------
         Self
-            A Monte Carlo object.
+            The `MonteCarlo` object created from the dictionary.
         """
-        kwargs = deepcopy(data.get("kwargs", {}))
+        data = deepcopy(data)
+
+        kwargs = data.get("kwargs", {})
         kwargs = kwargs | kwargs_override
 
         mc = cls(data["atoms"], **kwargs)
@@ -504,15 +297,19 @@ class MonteCarlo[MoveProtocol: BaseProtocol, ContextType: Context](Driver):
         for key, value in data.get("context", {}).items():
             setattr(mc.context, key, value)
 
-        for name, move_data in data.get("moves", {}).items():
-            move_storage = MoveStorage[MoveProtocol].from_dict(move_data)
-            mc.add_move(move=move_storage, name=name)
+        for name, move_storage_data in data.get("moves", {}).items():
+            move_storage_class: type[MoveStorage[MoveType, CriteriaType]] = (
+                get_typed_class(move_storage_data["name"], MoveStorage)
+            )
+            move_storage = move_storage_class.from_dict(move_storage_data)
+
+            mc.moves[name] = move_storage
 
         return mc
 
     def yield_moves(self) -> Generator[str, None, None]:
         """
-        Yield moves to be performed given the move parameters. The moves are selected based on the probability of the move and the interval at which the move is attempted. Forced moves are introduced based on their minimum count. moves are yielded separately, re-constructing the move_probabilities array each time, allowing for a dynamic change in the probability of moves.
+        Yield moves to be performed given the move configured. The moves are selected based on their probability, and their interval. Forced moves are introduced based on their minimum count. Moves are yielded separately, re-constructing the move_probabilities array each time, allowing for a dynamic change in the probability of moves between moves.
 
         Yields
         ------
@@ -549,8 +346,14 @@ class MonteCarlo[MoveProtocol: BaseProtocol, ContextType: Context](Driver):
                 yield selected_move
 
     def step(self) -> Generator[str, None, None]:
-        self.last_results = self.atoms.calc.results  # type: ignore # can we move this to validate_simulation?
+        """
+        Perform a single step of the simulation.
 
+        Yields
+        ------
+        Generator[str, None, None]
+            A generator yielding the names of the moves that will be performed in this step.
+        """
         self.move_history = []
 
         for move_name in self.yield_moves():
@@ -559,7 +362,7 @@ class MonteCarlo[MoveProtocol: BaseProtocol, ContextType: Context](Driver):
             move_storage = self.moves[move_name]
             move = move_storage.move
 
-            if move():
+            if move(self.context):
                 is_accepted = move_storage.criteria.evaluate(self.context)
 
                 if is_accepted:
@@ -579,11 +382,15 @@ class MonteCarlo[MoveProtocol: BaseProtocol, ContextType: Context](Driver):
         """
         Save the current state of the simulation. This method is called when a move is accepted.
         """
+        self.context.save_state()
+
         try:
-            self.last_results = self.atoms.calc.results  # type: ignore
+            self.last_results = self.atoms.calc.results  # type: ignore[try-attr]
         except AttributeError:
             warn(
-                "Atoms object does not have calculator results attached.", stacklevel=2
+                "Atoms object does not have calculator results attached.",
+                UserWarning,
+                2,
             )
             self.last_results = {}
 
@@ -591,12 +398,15 @@ class MonteCarlo[MoveProtocol: BaseProtocol, ContextType: Context](Driver):
         """
         Revert the last move made by the simulation. This method is called when a move is rejected.
         """
+        self.context.revert_state()
+
         try:
-            self.atoms.calc.results = self.last_results  # type: ignore
+            self.atoms.calc.results = self.last_results  # type: ignore[try-attr]
         except AttributeError:
             warn(
                 "Atoms object does not have calculator attached, or does not support the `results` attribute",
-                stacklevel=2,
+                UserWarning,
+                2,
             )
 
     def __repr__(self) -> str:
@@ -608,89 +418,4 @@ class MonteCarlo[MoveProtocol: BaseProtocol, ContextType: Context](Driver):
         str
             A string representation of the Monte Carlo object.
         """
-        return f"MonteCarlo(atoms={self.atoms}, max_cycles={self.max_cycles}, seed={self.__seed}, moves={self.moves}, step_count={self.step_count}, default_logger={self.default_logger}, default_trajectory={self.default_trajectory}, default_restart={self.default_restart})"
-
-
-@dataclass
-class MoveStorage[MoveProtocol: BaseProtocol]:
-    """
-    Dataclass to store the moves and their acceptance criteria.
-
-    Attributes
-    ----------
-    move: MoveProtocol
-        The move object.
-    interval: int
-        The interval at which the move is selected.
-    probability: float
-        The probability of the move being selected.
-    minimum_count: int
-        The minimum number of times the move must be performed in a cycle.
-    criteria: Criteria
-        The acceptance criteria for the move.
-    """
-
-    move: MoveProtocol
-    interval: int
-    probability: float
-    minimum_count: int
-    criteria: Criteria
-
-    def to_dict(self) -> dict[str, Any]:
-        """
-        Return a dictionary representation of the MoveStorage object.
-
-        Returns
-        -------
-        dict[str, Any]
-            A dictionary representation of the MoveStorage object.
-        """
-        return {
-            "move": self.move.to_dict(),
-            "interval": self.interval,
-            "probability": self.probability,
-            "minimum_count": self.minimum_count,
-            "criteria": self.criteria.to_dict(),
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> MoveStorage[MoveProtocol]:
-        """
-        Load the MoveStorage object from a dictionary.
-        This method is used to restore the state of the MoveStorage object from a saved state.
-
-        Parameters
-        ----------
-        data : dict[str, Any]
-            A dictionary representation of the MoveStorage object.
-        """
-        move_data = data["move"]
-        move_class: type[BaseProtocol] = get_typed_class(
-            move_data["name"], BaseProtocol
-        )
-        move = cast(MoveProtocol, move_class.from_dict(move_data))
-
-        criteria_data = data["criteria"]
-        criteria_class: type[Criteria] = get_typed_class(
-            criteria_data["name"], Criteria
-        )
-        criteria = criteria_class.from_dict(criteria_data)
-
-        return cls(
-            move=move,
-            interval=data["interval"],
-            probability=data["probability"],
-            minimum_count=data["minimum_count"],
-            criteria=criteria,
-        )
-
-    def __repr__(self) -> str:
-        """
-        Return a string representation of the MoveStorage object.
-
-        Returns
-        -------
-        str
-            A string representation of the MoveStorage object.
-        """
-        return f"MoveStorage(move={self.move}, interval={self.interval}, probability={self.probability}, minimum_count={self.minimum_count}, criteria={self.criteria})"
+        return f"{self.__class__.__name__}(atoms={self.atoms}, max_cycles={self.max_cycles}, seed={self.__seed}, moves={self.moves}, step_count={self.step_count}, default_logger={self.default_logger}, default_trajectory={self.default_trajectory}, default_restart={self.default_restart})"

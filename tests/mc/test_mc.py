@@ -3,16 +3,17 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from ase.atoms import Atoms
 from ase.calculators.calculator import Calculator
+from tests.conftest import DummyCriteria
 
 from quansino.io.logger import Logger
+from quansino.mc.contexts import DisplacementContext
 from quansino.mc.core import MonteCarlo
-from quansino.mc.criteria import Criteria
+from quansino.mc.criteria import BaseCriteria
 from quansino.moves.core import BaseMove, CompositeMove
 from quansino.moves.displacement import DisplacementMove
 from quansino.moves.exchange import ExchangeMove
-from quansino.operations.cell import StrainOperation
+from quansino.operations.cell import DeformationOperation
 from quansino.operations.displacement import DisplacementOperation
 
 
@@ -36,9 +37,15 @@ def test_mc_class(bulk_small):
     with pytest.raises(AttributeError):
         mc.validate_simulation()
 
+    with pytest.warns(UserWarning):
+        mc.save_state()
+
     mc.atoms.calc = None
     with pytest.raises(AttributeError):
         mc.validate_simulation()
+
+    with pytest.warns(UserWarning):
+        mc.revert_state()
 
     mc.step_count = -1
     assert not mc.converged()
@@ -46,15 +53,16 @@ def test_mc_class(bulk_small):
     move = DisplacementMove([])
 
     with pytest.raises(ValueError):
-        mc.add_move(move, probability=1.0)
+        mc.add_move(move, DummyCriteria(), probability=1, minimum_count=1000)
+
+    assert (
+        mc.__repr__()
+        == "MonteCarlo(atoms=Atoms(symbols='Cu4', pbc=True, cell=[3.61, 3.61, 3.61]), max_cycles=1, seed=42, moves={}, step_count=-1, default_logger=None, default_trajectory=None, default_restart=None)"
+    )
 
 
 def test_mc_yield_moves(bulk_small):
     mc = MonteCarlo(bulk_small, seed=42)
-
-    class DummyCriteria(Criteria):
-        def evaluate(self) -> bool:
-            return True
 
     assert list(mc.yield_moves()) == []
 
@@ -88,6 +96,25 @@ def test_mc_yield_moves(bulk_small):
     del mc.moves["my_move_2"]
 
     assert list(mc.yield_moves()) == []
+
+    mc.context = DisplacementContext(bulk_small, mc._rng)
+
+    move = DisplacementMove([])
+
+    mc.add_move(
+        move,
+        criteria=DummyCriteria(),
+        name="my_move_3",
+        probability=1.0,
+        minimum_count=1,
+    )
+
+    move.check_move = lambda: False
+
+    for move_name in mc.step():
+        assert move_name == "my_move_3"
+
+    assert mc.move_history == [("my_move_3", None)]
 
     mc.max_cycles = 100
 
@@ -258,12 +285,12 @@ def test_mc_serialization_deserialization(bulk_small):
     from quansino.registry import register
 
     @register()
-    class DummyCriteria(Criteria):
+    class DummyCriteria(BaseCriteria):
         def evaluate(self) -> bool: ...
 
     for move_name, move in moves_registry.items():
         for operation_name, operation in operations_registry.items():
-            if issubclass(operation, StrainOperation):
+            if issubclass(operation, DeformationOperation):
                 move_operation = operation(max_value=0.1)
             elif issubclass(operation, DisplacementOperation):
                 move_operation = operation()
@@ -282,11 +309,7 @@ def test_mc_serialization_deserialization(bulk_small):
                     ]
                 )
             elif issubclass(move, ExchangeMove):
-                to_add = move(
-                    exchange_atoms=Atoms(),
-                    labels=[-1, -1, -1, -1],
-                    operation=move_operation,
-                )
+                to_add = move(labels=[-1, -1, -1, -1], operation=move_operation)
             elif issubclass(move, DisplacementMove):
                 to_add = move(labels=[0, 1, 2, 3], operation=move_operation)
             elif issubclass(move, BaseMove):

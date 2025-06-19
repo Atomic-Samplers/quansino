@@ -2,64 +2,57 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar
+from typing import TYPE_CHECKING, ClassVar, cast
 from warnings import warn
 
 from quansino.mc.canonical import Canonical
-from quansino.mc.contexts import StrainContext
+from quansino.mc.contexts import DeformationContext
 from quansino.mc.criteria import CanonicalCriteria, IsobaricCriteria
 from quansino.moves.cell import CellMove
 from quansino.moves.displacement import DisplacementMove
-from quansino.moves.protocol import CellProtocol, DisplacementProtocol
+from quansino.protocols import Criteria, Move
 
 if TYPE_CHECKING:
-    from collections.abc import Generator
 
     from ase.atoms import Atoms
 
-    from quansino.mc.core import MoveStorage
 
-
-class Isobaric[
-    MoveProtocol: DisplacementProtocol | CellProtocol, ContextType: StrainContext
-](Canonical[MoveProtocol, ContextType]):
+class Isobaric[MoveType: Move, CriteriaType: Criteria](
+    Canonical[MoveType, CriteriaType]
+):
     """
-    Isobaric (NPT) Monte Carlo simulation object.
+    Isobaric (NPT) Monte Carlo simulation object for performing NPT simulations. This class is a subclass of the [`Canonical`][quansino.mc.canonical.Canonical] class and provides additional functionality specific to isobaric simulations. It uses the [`DeformationContext`][quansino.mc.contexts.DeformationContext] context by default.
 
     Parameters
     ----------
     atoms : Atoms
         The atoms object to perform the simulation on, will be acted upon in place.
-    temperature : float
-        The temperature of the simulation in Kelvin.
+    temperature : float, optional
+        The temperature of the simulation in Kelvin, by default 298.15 K.
     pressure : float, optional
         The pressure of the simulation in eV/Å^3, by default 0.0.
-    max_cycles : int, optional
-        The number of Monte Carlo cycles to perform, by default equal to the number of atoms.
-    default_displacement_move : MoveStorage[MoveProtocol] | MoveProtocol, optional
-        The default displacement move to perform in each cycle. If a `MoveStorage` object is provided,
-        it will be used to initialize the move with its criteria and other parameters.
-        If a `MoveProtocol` object is provided, it will be added using the default criteria and parameters, by default None.
-    default_cell_move : MoveStorage[MoveProtocol] | MoveProtocol, optional
-        The default cell move to perform in each cycle. If a `MoveStorage` object is provided,
-        it will be used to initialize the move with its criteria and other parameters.
-        If a `MoveProtocol` object is provided, it will be added using the default criteria and parameters, by default None.
-    **mc_kwargs
-        Additional keyword arguments to pass to the [`MonteCarlo`][quansino.mc.core.MonteCarlo] parent class.
+    default_displacement_move : MoveType | None, optional
+        The default displacement move to perform in each cycle, by default None.
+    default_cell_move : MoveType | None, optional
+        The default cell move to perform in each cycle, by default None.
+    **mc_kwargs : Any
+        Additional keyword arguments to pass to the parent classes.
 
     Attributes
     ----------
     pressure : float
         The pressure of the simulation in eV/Å^3.
-    last_cell : Cell
-        The last cell of the atoms object in the simulation.
+    default_criteria : ClassVar
+        The default criteria used for the simulation, set to [`CanonicalCriteria`][quansino.mc.criteria.CanonicalCriteria] for [`DisplacementMove`][quansino.moves.displacement.DisplacementMove] and [`IsobaricCriteria`][quansino.mc.criteria.IsobaricCriteria] for [`CellMove`][quansino.moves.cell.CellMove].
+    default_context : ClassVar
+        The default context used for the simulation, set to [`DeformationContext`][quansino.mc.contexts.DeformationContext].
     """
 
     default_criteria: ClassVar = {
         DisplacementMove: CanonicalCriteria,
         CellMove: IsobaricCriteria,
     }
-    default_context: ClassVar = StrainContext
+    default_context: ClassVar = DeformationContext
 
     def __init__(
         self,
@@ -67,13 +60,11 @@ class Isobaric[
         temperature: float,
         pressure: float = 0.0,
         max_cycles: int | None = None,
-        default_displacement_move: (
-            MoveStorage[MoveProtocol] | MoveProtocol | None
-        ) = None,
-        default_cell_move: MoveStorage[MoveProtocol] | MoveProtocol | None = None,
+        default_displacement_move: MoveType | None = None,
+        default_cell_move: MoveType | None = None,
         **mc_kwargs,
     ) -> None:
-        """Initialize the Isobaric Monte Carlo object."""
+        """Initialize the `Isobaric` object."""
         super().__init__(
             atoms, temperature, max_cycles, default_displacement_move, **mc_kwargs
         )
@@ -85,8 +76,14 @@ class Isobaric[
 
         self.set_default_probability()
 
-        if self.default_logger:
-            self.default_logger.add_field("AcptRate", lambda: self.acceptance_rate)
+        if isinstance(self.context, DeformationContext):
+            self.context = cast("DeformationContext", self.context)
+        else:
+            warn(
+                "The context is not a `DeformationContext`. This may lead to unexpected behavior.",
+                UserWarning,
+                2,
+            )
 
     @property
     def pressure(self) -> float:
@@ -116,48 +113,28 @@ class Isobaric[
         """
         Set the default probability for the cell and displacement moves.
 
-        The probability for cell moves is set to 1/(N+1) and the probability for displacement moves
-        is set to 1/(1+1/N), where N is the number of atoms.
+        The probability for cell moves is set to 1/(N+1) and the probability for displacement moves is set to 1/(1+1/N), where N is the number of atoms.
         """
         if cell_move := self.moves.get("default_cell_move"):
             cell_move.probability = 1 / (len(self.atoms) + 1)
         if displacement_move := self.moves.get("default_displacement_move"):
             displacement_move.probability = 1 / (1 + 1 / len(self.atoms))
 
-    def step(self) -> Generator[str, None, None]:
+    def validate_simulation(self) -> None:
         """
-        Perform operations before the Monte Carlo step.
-
-        This method saves the current cell state in addition to the operations
-        performed by the parent class.
+        This method also ensures that the cell is saved in the context.
         """
         self.context.last_cell = self.atoms.get_cell()
-        yield from super().step()
 
-    def save_state(self) -> None:
-        """
-        Save the current state of the context and update the last positions, cell, and results.
-
-        This method saves the cell state in addition to the state saved by the parent class.
-        """
-        super().save_state()
-        self.context.last_cell = self.atoms.get_cell()
+        super().validate_simulation()
 
     def revert_state(self) -> None:
         """
-        Revert to the previously saved state and undo the last move.
-
-        This method restores the cell state in addition to the state restored by the parent class.
-
-        Raises
-        ------
-        AttributeError
-            If the atoms object does not have a calculator attached.
+        Revert to the previously saved state and undo the last move. This method restores the cell state in addition to the state restored by the parent class.
         """
         super().revert_state()
-        self.atoms.set_cell(self.context.last_cell, scale_atoms=False)
 
         try:
-            self.atoms.calc.atoms.cell = self.atoms.cell.copy()  # type: ignore
+            self.atoms.calc.atoms.cell = self.atoms.cell.copy()  # type: ignore[try-attr]
         except AttributeError:
             warn("Atoms object does not have calculator attached.", stacklevel=2)

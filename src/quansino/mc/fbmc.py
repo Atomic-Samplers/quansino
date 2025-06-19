@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from ase.atoms import Atoms
     from numpy.typing import NDArray
 
-    from quansino.type_hints import Displacement, Forces, Masses, ShapedMasses
+    from quansino.type_hints import Displacements, Forces, Masses, ShapedMasses
 
 
 class ForceBias(Driver):
@@ -29,21 +29,23 @@ class ForceBias(Driver):
 
     Parameters
     ----------
-    atoms: Atoms
+    atoms : Atoms
         The atomic system being simulated.
-    delta: float
-        Delta parameter in Angstrom which influence how much the atoms are moved.
-    temperature: float
-        The temperature of the simulation in Kelvin. Default: 298.15.
-    **mc_kwargs
-        Additional keyword arguments to pass to the MonteCarlo superclass. See [`MonteCarlo`][quansino.mc.core.MonteCarlo] for more information.
+    delta : float
+        Delta parameter in Ångstrom which influence how much the atoms are moved.
+    temperature : float, optional
+        The temperature of the simulation in Kelvin, by default 298.15 K.
+    seed : int | None, optional
+        Seed for the random number generator, by default None. If None, a random seed is generated.
+    **driver_kwargs : Any
+        Additional keyword arguments to pass to the parent classes. See [`MonteCarlo`][quansino.mc.core.MonteCarlo] and [`Driver`][quansino.mc.driver.Driver] for more information.
 
     Attributes
     ----------
     gamma_max_value: float
         Maximum value for the gamma parameter, used to avoid overflow errors.
     delta: float
-        Delta parameter in Angstrom which influence how much the atoms are moved.
+        Delta parameter in Ångstrom which influence how much the atoms are moved.
     temperature: float
         The temperature of the simulation in Kelvin.
     masses_scaling_power: NDArray
@@ -102,7 +104,7 @@ class ForceBias(Driver):
 
         Parameters
         ----------
-        forces
+        forces : Forces
             The forces acting on the atoms.
         """
         self.gamma = np.clip(
@@ -114,7 +116,14 @@ class ForceBias(Driver):
         self.denominator = np.exp(self.gamma) - np.exp(-self.gamma)
 
     def to_dict(self) -> dict[str, Any]:
-        """Return a dictionary representation of the object."""
+        """
+        Convert the ForceBias object to a dictionary.
+
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary containing the state of the ForceBias object, including the random number generator state,
+        """
         dictionary = super().to_dict()
         dictionary["rng_state"] = self._rng.bit_generator.state
 
@@ -138,9 +147,8 @@ class ForceBias(Driver):
 
         Parameters
         ----------
-        value : dict[str, float] | NDArray | float
-            The power value(s). If a dict, keys are element symbols and values are the powers.
-            If an NDArray, it must have shape (n_atoms, 3). If a float, the same value is used for all atoms.
+        value : dict[str, float] | ShapedMasses | float
+            The power value(s). If a dict, keys are element symbols and values are the powers. If ShapedMasses, it must have shape (n_atoms, 3). If a float, the same value is used for all atoms.
 
         Raises
         ------
@@ -176,8 +184,8 @@ class ForceBias(Driver):
 
         Parameters
         ----------
-        masses : Masses | None, optional
-            The masses to use. If None, uses the masses from the atoms object.
+        masses : ShapedMasses | Masses | None, optional
+            The masses to use, by default None. If None, uses the masses from the atoms object.
         """
         if masses is None:
             masses = self.atoms.get_masses()
@@ -188,7 +196,14 @@ class ForceBias(Driver):
         self.shaped_masses = masses
 
     def step(self) -> Forces:
-        """Perform one Force Bias Monte Carlo step."""
+        """
+        Perform one Force Bias Monte Carlo step.
+
+        Returns
+        -------
+        Forces
+            The forces acting on the atoms after the Monte Carlo step.
+        """
         forces = self.atoms.get_forces()
         positions = self.atoms.get_positions()
 
@@ -218,9 +233,9 @@ class ForceBias(Driver):
 
         return forces
 
-    def get_zeta(self) -> Displacement:
+    def get_zeta(self) -> Displacements:
         """
-        Get the zeta parameter for the Monte Carlo step.
+        Get the zeta parameter for the current step.
 
         Returns
         -------
@@ -229,13 +244,13 @@ class ForceBias(Driver):
         """
         return self._rng.uniform(-1, 1, self.current_size)
 
-    def calculate_trial_probability(self) -> NDArray:
+    def calculate_trial_probability(self) -> NDArray[np.floating]:
         """
         Calculate the trial probability for the Monte Carlo step based on the force bias.
 
         Returns
         -------
-        NDArray
+        NDArray[np.floating]
             The trial probability for each atom and direction.
         """
         sign_zeta = np.sign(self.zeta)

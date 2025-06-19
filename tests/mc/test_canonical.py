@@ -9,18 +9,21 @@ from tests.conftest import DummyCalculator
 
 from quansino.mc.canonical import Canonical
 from quansino.mc.contexts import DisplacementContext
-from quansino.mc.core import MoveStorage
-from quansino.mc.criteria import CanonicalCriteria, Criteria
+from quansino.mc.criteria import BaseCriteria, CanonicalCriteria
 from quansino.moves.displacement import DisplacementMove
 from quansino.operations.displacement import Ball
+from quansino.utils.moves import MoveStorage
 
 
 def test_canonical(bulk_small, tmp_path):
     """Test that the Canonical class works as expected."""
-    move = DisplacementMove(np.arange(len(bulk_small)), Ball(1.0))
+    move = DisplacementMove[Ball, DisplacementContext](
+        np.arange(len(bulk_small)), Ball(1.0)
+    )
 
-    assert move.operation.step_size == 1.0  # type: ignore
-    mc = Canonical(
+    assert move.operation.step_size == 1.0
+
+    mc = Canonical[DisplacementMove, BaseCriteria](
         bulk_small,
         temperature=10.0,
         default_displacement_move=move,
@@ -44,7 +47,8 @@ def test_canonical(bulk_small, tmp_path):
     assert data["kwargs"]["seed"] == mc._MonteCarlo__seed  # type: ignore
     assert data["rng_state"] == mc._rng.bit_generator.state
     assert (
-        data["moves"]["default_displacement_move"]["move"]["name"] == "DisplacementMove"
+        data["moves"]["default_displacement_move"]["kwargs"]["move"]["name"]
+        == "DisplacementMove"
     )
 
     assert isinstance(mc.moves["default_displacement_move"].move.operation, Ball)
@@ -52,20 +56,17 @@ def test_canonical(bulk_small, tmp_path):
 
     mc.context.last_energy = 0.0
 
-    # assert mc.moves["default_displacement_move"].criteria.evaluate(mc.context)
     assert mc.moves["default_displacement_move"].probability == 1.0
     assert mc.moves["default_displacement_move"].interval == 1
     assert mc.moves["default_displacement_move"].minimum_count == 0
     assert_equal(
         mc.moves["default_displacement_move"].move.labels, np.arange(len(bulk_small))
     )
-    assert isinstance(
-        mc.moves["default_displacement_move"].move.context, DisplacementContext
-    )
-    assert mc.moves["default_displacement_move"].move.context.atoms == bulk_small
     assert mc.moves["default_displacement_move"].move.max_attempts == 10000
 
     energy = mc.atoms.get_potential_energy()
+
+    mc.validate_simulation()
 
     for _ in mc.step():
         pass
@@ -82,7 +83,7 @@ def test_canonical(bulk_small, tmp_path):
     mc.temperature = 300.0
     mc.max_cycles = 1
 
-    class DummyCriteria(Criteria):
+    class DummyCriteria(BaseCriteria):
         def evaluate(self, context: DisplacementContext) -> bool:
             return context.rng.random() < 0.5
 
@@ -94,7 +95,7 @@ def test_canonical(bulk_small, tmp_path):
     mc.default_logger.file.truncate()
 
     acceptances = []
-    for _ in mc.run_steps(1000):
+    for _ in mc.srun(1000):
         assert mc.atoms.calc is not None
         assert not compare_atoms(mc.atoms.calc.atoms, mc.atoms)
 
@@ -115,7 +116,7 @@ def test_canonical(bulk_small, tmp_path):
     assert_array_equal(acceptances, acceptance_from_log)
     assert_allclose(np.sum(acceptances), 500, atol=100)
 
-    move_storage = MoveStorage[DisplacementMove](
+    move_storage = MoveStorage(
         move=move,
         interval=4,
         probability=0.4,
@@ -123,15 +124,17 @@ def test_canonical(bulk_small, tmp_path):
         criteria=DummyCriteria(),
     )
 
-    mc = Canonical(
-        bulk_small, default_displacement_move=move_storage, temperature=0.1, seed=42
+    mc = Canonical[DisplacementMove, DummyCriteria](
+        bulk_small, temperature=0.1, seed=42
     )
+
+    mc.moves["default_displacement_move"] = move_storage
 
     assert mc.moves["default_displacement_move"].move == move
     assert mc.moves["default_displacement_move"].interval == 4
     assert mc.moves["default_displacement_move"].probability == 0.4
     assert mc.moves["default_displacement_move"].minimum_count == 0
-    assert mc.moves["default_displacement_move"].move.operation.step_size == 1.0  # type: ignore
+    assert mc.moves["default_displacement_move"].move.operation.step_size == 1.0
 
     mc.atoms.calc = DummyCalculator()
 
@@ -183,7 +186,7 @@ def test_canonical_restart(bulk_small, tmp_path):
     )
     assert (
         reconstructed_mc.moves["default_displacement_move"].move.operation.step_size
-        == mc.moves["default_displacement_move"].move.operation.step_size  # type: ignore
+        == mc.moves["default_displacement_move"].move.operation.step_size
     )
     assert_allclose(
         reconstructed_mc.moves["default_displacement_move"].move.labels,
@@ -193,18 +196,7 @@ def test_canonical_restart(bulk_small, tmp_path):
         reconstructed_mc.moves["default_displacement_move"].move.max_attempts
         == mc.moves["default_displacement_move"].move.max_attempts
     )
-    assert (
-        reconstructed_mc.moves["default_displacement_move"].move.context.atoms
-        == mc.moves["default_displacement_move"].move.context.atoms
-    )
-    assert (
-        reconstructed_mc.moves["default_displacement_move"].move.context.temperature
-        == mc.moves["default_displacement_move"].move.context.temperature
-    )
-    assert isinstance(
-        reconstructed_mc.moves["default_displacement_move"].move.context,
-        DisplacementContext,
-    )
+    assert isinstance(reconstructed_mc.context, DisplacementContext)
     assert isinstance(
         reconstructed_mc.moves["default_displacement_move"].criteria, CanonicalCriteria
     )
@@ -243,7 +235,7 @@ def test_canonical_restart(bulk_small, tmp_path):
 
     external_rng = default_rng(42)
 
-    for _ in mc.run_steps(20):
+    for _ in mc.srun(20):
         energies.append(mc.context.last_energy)
 
     energies_reconstructed = []

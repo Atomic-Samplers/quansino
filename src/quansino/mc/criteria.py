@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from abc import ABC, abstractmethod
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Self
 
 import numpy as np
 from ase.units import _e, _hplanck, _Nav, kB
@@ -10,32 +10,30 @@ from ase.units import _e, _hplanck, _Nav, kB
 if TYPE_CHECKING:
     from quansino.mc.contexts import (
         Context,
+        DeformationContext,
         DisplacementContext,
         ExchangeContext,
-        StrainContext,
     )
 
 
-class Criteria(ABC):
+class BaseCriteria(ABC):
     """
-    Base class for Monte Carlo acceptance criteria.
-
-    This abstract class defines the interface for all acceptance criteria
-    used in Monte Carlo simulations. Implementations must provide an
-    `evaluate` method that determines whether a move is accepted or rejected.
+    Base class for acceptance criteria, it defines the interface for acceptance criteria used in simulations. Implementations must provide an `evaluate` method that determines whether a move is accepted or rejected.
     """
 
     @abstractmethod
     def evaluate(self, context: Context, *args, **kwargs) -> bool:
         """
-        Evaluate whether a Monte Carlo move should be accepted.
+        Evaluate whether a Monte Carlo move should be accepted. This method should be implemented in subclasses.
 
         Parameters
         ----------
         context : Context
             The simulation context containing information about the current state.
-        *args, **kwargs
-            Additional arguments for the evaluation.
+        *args : Any
+            Positional arguments passed to the method.
+        **kwargs : Any
+            Keyword arguments passed to the method.
 
         Returns
         -------
@@ -46,29 +44,29 @@ class Criteria(ABC):
 
     def to_dict(self) -> dict[str, Any]:
         """
-        Convert the criteria to a dictionary.
+        Convert the `BaseCriteria` object to a dictionary.
 
         Returns
         -------
         dict[str, Any]
-            A dictionary representation of the criteria.
+            A dictionary representation of the `BaseCriteria` object.
         """
         return {"name": self.__class__.__name__}
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Criteria:
+    def from_dict(cls, data: dict[str, Any]) -> Self:
         """
-        Create a criteria object from a dictionary.
+        Create a `BaseCriteria` object from a dictionary.
 
         Parameters
         ----------
         data : dict[str, Any]
-            The dictionary representation of the criteria.
+            The dictionary representation of the `BaseCriteria` object.
 
         Returns
         -------
-        Criteria
-            The criteria object created from the dictionary.
+        Self
+            The `BaseCriteria` object created from the dictionary.
         """
         kwargs = data.get("kwargs", {})
         instance = cls(**kwargs)
@@ -79,18 +77,15 @@ class Criteria(ABC):
         return instance
 
 
-class CanonicalCriteria(Criteria):
+class CanonicalCriteria(BaseCriteria):
     """
-    Acceptance criteria for Monte Carlo moves in the canonical (NVT) ensemble.
-
-    This criteria implements the Metropolis algorithm for the canonical ensemble,
-    where the number of particles, volume, and temperature are constant.
+    Acceptance criteria for Monte Carlo simulation in the canonical (NVT) ensemble.
     """
 
     @staticmethod
     def evaluate(context: DisplacementContext) -> bool:
         """
-        Evaluate the acceptance criteria for a Monte Carlo move.
+        Evaluate the acceptance criteria.
 
         Parameters
         ----------
@@ -109,23 +104,19 @@ class CanonicalCriteria(Criteria):
         )
 
 
-class IsobaricCriteria(Criteria):
+class IsobaricCriteria(BaseCriteria):
     """
-    Acceptance criteria for Monte Carlo moves in the isothermal-isobaric (NPT) ensemble.
-
-    This criteria implements the Metropolis algorithm for the NPT ensemble,
-    where the number of particles, pressure, and temperature are constant.
-    The acceptance probability accounts for both energy changes and volume changes.
+    Acceptance criteria for moves in the isothermal-isobaric (NPT) ensemble.
     """
 
     @staticmethod
-    def evaluate(context: StrainContext) -> bool:
+    def evaluate(context: DeformationContext) -> bool:
         """
         Evaluate the acceptance criteria for a Monte Carlo move.
 
         Parameters
         ----------
-        context : StrainContext
+        context : DeformationContext
             The context of the Monte Carlo simulation.
 
         Returns
@@ -147,25 +138,19 @@ class IsobaricCriteria(Criteria):
         )
 
 
-class GrandCanonicalCriteria(Criteria):
+class GrandCanonicalCriteria(BaseCriteria):
     """
     Acceptance criteria for Monte Carlo moves in the grand canonical (μVT) ensemble.
-
-    This criteria implements the Metropolis algorithm for the grand canonical ensemble,
-    where the chemical potential, volume, and temperature are constant. The number
-    of particles is allowed to fluctuate. The acceptance probability accounts for
-    energy changes and particle insertion/deletion.
     """
 
-    @staticmethod
-    def evaluate(context: ExchangeContext) -> bool:
+    def evaluate(self, context: ExchangeContext) -> bool:
         """
         Evaluate the acceptance criteria for a Monte Carlo move.
 
         Parameters
         ----------
-        context : ContextType
-            The context of the Monte Carlo simulation.
+        context : ExchangeContext
+            The context of the Monte Carlo simulation containing exchange-specific information such as added/deleted atoms, chemical potential, and accessible volume.
 
         Returns
         -------
@@ -175,15 +160,8 @@ class GrandCanonicalCriteria(Criteria):
         energy_difference = context.atoms.get_potential_energy() - context.last_energy
 
         number_of_exchange_particles = context.number_of_exchange_particles
-
-        if context.added_atoms:
-            mass = context.added_atoms.get_masses().sum()
-            particle_delta = 1
-        elif context.deleted_atoms:
-            mass = context.deleted_atoms.get_masses().sum()
-            particle_delta = -1
-        else:
-            raise ValueError("No atoms were added or deleted.")
+        mass = context.exchange_atoms.get_masses().sum()
+        particle_delta = context.particle_delta
 
         volume = context.accessible_volume**particle_delta
 
@@ -213,6 +191,7 @@ class GrandCanonicalCriteria(Criteria):
         exponential = (
             particle_delta * context.chemical_potential - energy_difference
         ) / (context.temperature * kB)
+
         criteria = math.exp(exponential)
 
         return context.rng.random() < criteria * prefactor

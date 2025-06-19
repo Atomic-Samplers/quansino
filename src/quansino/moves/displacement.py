@@ -7,16 +7,18 @@ from typing import TYPE_CHECKING, Any, Literal
 import numpy as np
 
 from quansino.mc.contexts import DisplacementContext
-from quansino.moves.core import BaseMove, CompositeMove
-from quansino.operations.displacement import Box
+from quansino.moves.composite import CompositeMove
+from quansino.moves.core import BaseMove
+from quansino.operations.displacement import Ball
+from quansino.protocols import Operation
 
 if TYPE_CHECKING:
-    from quansino.moves.exchange import ExchangeMove
-    from quansino.operations.core import Operation
     from quansino.type_hints import IntegerArray
 
 
-class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
+class DisplacementMove[OperationType: Operation, ContextType: DisplacementContext](
+    BaseMove[OperationType, ContextType]
+):
     """
     Class for displacement moves that displaces one atom or a group of atoms. The class will use an [`Operation`][quansino.operations.core.Operation]. The class uses the `labels` attribute to determine which atoms can be displaced, if none, the move fails. If multiple atoms share the same label, they are considered to be part of the same group (molecule) and will be displaced together in a consistent manner.
 
@@ -50,16 +52,21 @@ class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
 
     Important
     ---------
-    1. At object creation, `labels` must have the same length as the number of atoms in the simulation.
-    2. Conditions for a successful move can be tightened either by subclassing the move and overriding the `check_move` method, or by using the [`MethodType`][types.MethodType] function to replace the method in the instance.
+    At object creation, `labels` must have the same length as the number of atoms in the simulation.
     """
 
-    is_updatable: bool = True
+    __slots__ = (
+        "default_label",
+        "displaced_labels",
+        "labels",
+        "to_displace_labels",
+        "unique_labels",
+    )
 
     def __init__(
         self,
         labels: IntegerArray,
-        operation: Operation | None = None,
+        operation: OperationType | None = None,
         apply_constraints: bool = True,
     ) -> None:
         """Initialize the DisplacementMove object.
@@ -73,35 +80,36 @@ class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
         apply_constraints : bool, optional
             Whether to apply constraints to the move, by default True.
         """
-
         self.to_displace_labels: int | None = None
         self.displaced_labels: int | None = None
 
         self.default_label: int | None = None
         self.set_labels(labels)
 
-        if operation is None:
-            operation = Box(0.1)
-
         super().__init__(operation, apply_constraints)
 
-    def attempt_move(self: DisplacementMove | ExchangeMove) -> bool:
+        self.composite_move_type = CompositeDisplacementMove
+
+    def attempt_displacement(self, context: ContextType) -> bool:
         """
         Attempt to move the atoms using the provided operation and check. The move is attempted `max_attempts` number of times. If the move is successful, return True, otherwise, return False.
+
+        Parameters
+        ----------
+        context : ContextType
+            The context for the move.
 
         Returns
         -------
         bool
             Whether the move was valid.
         """
-        atoms = self.context.atoms
+        atoms = context.atoms
         old_positions = atoms.get_positions()
 
         for _ in range(self.max_attempts):
             translation = np.full((len(atoms), 3), 0.0)
-            translation[self.context.moving_indices] = self.operation.calculate(
-                self.context
-            )
+            translation[context._moving_indices] = self.operation.calculate(context)
 
             atoms.set_positions(
                 atoms.positions + translation, apply_constraint=self.apply_constraints
@@ -114,32 +122,32 @@ class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
 
         return False
 
-    def __call__(self) -> bool:
+    def __call__(self, context: ContextType) -> bool:
         """
         Perform the displacement move. The following steps are performed:
 
-        1. Reset the context, this is done to clear any previous move attributes such as `moving_indices`, which is needed by some specific operations.
-        2. Check if the atoms to displace are manually set. If not, select a random label from the available labels, if no labels are available, the move fails.
-        3. Find the indices of the atoms to displace and attempt to move them using `attempt_move`. If the move is successful, register a success and return True. Otherwise, register a failure and return False.
+        1. Check if the atoms to displace are manually set. If not, select a random label from the available labels, if no labels are available, the move fails.
+        2. Find the indices of the atoms to displace and attempt to move them using `attempt_displacement`. If the move is successful, register a success and return True. Otherwise, register a failure and return False.
+
+        Parameters
+        ----------
+        context : ContextType
+            The context for the move.
 
         Returns
         -------
         bool
             Whether the move was valid.
         """
-        self.context.reset()
-
         if self.to_displace_labels is None:
             if len(self.unique_labels) == 0:
                 return self.register_failure()
 
-            self.to_displace_labels = self.context.rng.choice(self.unique_labels)
+            self.to_displace_labels = context.rng.choice(self.unique_labels)
 
-        (self.context.moving_indices,) = np.where(
-            self.labels == self.to_displace_labels
-        )
+        (context._moving_indices,) = np.where(self.labels == self.to_displace_labels)
 
-        if self.attempt_move():
+        if self.attempt_displacement(context):
             return self.register_success()
         else:
             return self.register_failure()
@@ -153,8 +161,8 @@ class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
         new_labels : IntegerArray
             The new labels of the atoms to displace.
         """
-        self.labels: IntegerArray = np.asarray(new_labels)
-        self.unique_labels: IntegerArray = np.unique(self.labels[self.labels >= 0])
+        self.labels: IntegerArray = np.asarray(new_labels)  # type: ignore
+        self.unique_labels: IntegerArray = np.unique(self.labels[self.labels >= 0])  # type: ignore
 
     def register_success(self) -> Literal[True]:
         """
@@ -184,17 +192,29 @@ class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
 
         return False
 
-    def update(
-        self, indices_to_add: IntegerArray, indices_to_remove: IntegerArray
+    @property
+    def default_operation(self) -> Operation:
+        """
+        Get the default operation for the move.
+
+        Returns
+        -------
+        OperationType
+            The default operation for the move.
+        """
+        return Ball(0.1)
+
+    def on_atoms_changed(
+        self, added_indices: IntegerArray, removed_indices: IntegerArray
     ) -> None:
         """
         Update the move by resetting the labels and updating the operation.
 
         Parameters
         ----------
-        indices_to_add : IntegerArray
+        added_indices : IntegerArray
             The indices of the atoms to add.
-        indices_to_remove : IntegerArray
+        removed_indices : IntegerArray
             The indices of the atoms to remove.
 
         Raises
@@ -202,92 +222,25 @@ class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
         ValueError
             If the length of the labels is not equal to the number of atoms.
         """
-        if len(indices_to_add):
+        if len(added_indices):
             label: int = self.default_label or (
-                max(self.unique_labels) + 1 if len(self.unique_labels) else 0
+                np.max(self.unique_labels) + 1 if len(self.unique_labels) else 0
             )
             self.set_labels(
-                np.hstack((self.labels, np.full(len(indices_to_add), label)))
+                np.hstack((self.labels, np.full(len(added_indices), label)))
             )
 
-        if len(indices_to_remove):
-            self.set_labels(np.delete(self.labels, indices_to_remove))
-
-        if len(self.labels) != len(self.context.atoms):
-            raise ValueError(
-                "Updating the labels went wrong, the length of the labels is not equal to the number of atoms."
-            )
-
-    def __add__(
-        self, other: DisplacementMove | CompositeDisplacementMove
-    ) -> CompositeDisplacementMove[DisplacementMove]:
-        """
-        Add two displacement moves together to create a composite move.
-
-        Parameters
-        ----------
-        other : DisplacementMove | CompositeMove
-            The other displacement move to add.
-
-        Returns
-        -------
-        CompositeMove
-            The composite move.
-        """
-        if isinstance(other, CompositeDisplacementMove):
-            argument = [self, *other.moves]
-        else:
-            argument = [self, other]
-
-        return CompositeDisplacementMove(argument)
-
-    def __mul__(self, n: int) -> CompositeDisplacementMove[DisplacementMove]:
-        """
-        Multiply the displacement move by an integer to create a composite move.
-
-        Parameters
-        ----------
-        n : int
-            The number of times to repeat the move.
-
-        Returns
-        -------
-        CompositeMove
-            The composite move.
-        """
-        if n < 1 or not isinstance(n, int):
-            raise ValueError(
-                "The number of times the move is repeated must be a positive, non-zero integer."
-            )
-
-        return CompositeDisplacementMove[DisplacementMove]([self] * n)
-
-    __rmul__ = __mul__
-
-    def __copy__(self) -> DisplacementMove[ContextType]:
-        """
-        Create a shallow copy of the move.
-
-        Returns
-        -------
-        DisplacementMove
-            The shallow copy of the move.
-        """
-        new_move = DisplacementMove[ContextType](
-            self.labels, self.operation, self.apply_constraints
-        )
-        new_move.__dict__.update(self.__dict__)
-
-        return new_move
+        if len(removed_indices):
+            self.set_labels(np.delete(self.labels, removed_indices))
 
     def to_dict(self) -> dict[str, Any]:
         """
-        Convert the move to a dictionary.
+        Convert the `DisplacementMove` object to a dictionary.
 
         Returns
         -------
-        dict[str, str | bool]
-            A dictionary representation of the move.
+        dict[str, Any]
+            A dictionary representation of the `DisplacementMove` object.
         """
         dictionary = super().to_dict()
         dictionary.setdefault("kwargs", {})["labels"] = self.labels
@@ -296,9 +249,7 @@ class DisplacementMove[ContextType: DisplacementContext](BaseMove[ContextType]):
         return dictionary
 
 
-class CompositeDisplacementMove[MoveType: DisplacementMove[DisplacementContext]](
-    CompositeMove[MoveType]
-):
+class CompositeDisplacementMove(CompositeMove[DisplacementMove]):
     """
     Class to perform a composite displacement operation on atoms. This class is returned when adding or multiplying [`DisplacementMove`][quansino.moves.displacement.DisplacementMove] objects together.
 
@@ -309,69 +260,67 @@ class CompositeDisplacementMove[MoveType: DisplacementMove[DisplacementContext]]
 
     Attributes
     ----------
-    is_updatable : Literal[True]
-        Whether the move can be updated when atoms are added or removed.
     moves : list[DisplacementMove]
         The moves to perform in the composite move.
     displaced_labels : list[int | None]
         The labels of the atoms that were displaced in the last move.
     number_of_moved_particles : int
         The number of particles that were moved in the last move.
-    with_replacement : bool
-        Whether to allow the same label to be displaced multiple times in a single move.
     """
 
-    is_updatable: bool = True
+    __slots__ = ("displaced_labels",)
 
-    def __init__(self, moves: list[MoveType]) -> None:
+    def __init__(self, moves: list[DisplacementMove]) -> None:
         super().__init__(moves)
 
         self.displaced_labels: list[int | None] = []
-        self.number_of_moved_particles: int = 0
 
-        self.with_replacement = False
-
-    def __call__(self) -> bool:
+    def __call__(self, context: DisplacementContext) -> bool:
         """
-        Perform the displacement move. The following steps are performed:
+        Perform the composite displacement move. The following steps are performed:
 
-        1. If no candidates are available, return False and does not register a move.
-        2. Check if there are enough candidates to displace. If yes, select `displacements_per_move` number of candidates from the available candidates, if not, select the maximum number of candidates available.
-        3. If `to_displace_labels` is None, select `displacements_per_move` candidates from the available candidates.
-        4. Attempt to move each candidate using `attempt_move`. If any of the moves is successful, register a success and return True. Otherwise, register a failure and return False.
+        1. Reset the displaced_labels list to prepare for the new move.
+        2. For each move in the composite, find available candidates that haven't been displaced yet in this composite move.
+        3. If no candidates are available for a move, register a failure for that move and continue.
+        4. Select a random candidate from the available labels and attempt the displacement.
+        5. Register success or failure for each individual move.
+        6. Return True if at least one particle was moved, False otherwise.
+
+        Parameters
+        ----------
+        context : DisplacementContext
+            The context for the move.
 
         Returns
         -------
         bool
-            Whether the move was valid.
+            Whether at least one move in the composite was successful.
         """
         self.reset()
 
         for move in self.moves:
-            if move.to_displace_labels is None and self.with_replacement is False:
-                filtered_displaced_labels = [
-                    atom for atom in self.displaced_labels if atom is not None
-                ]
-                available_candidates: IntegerArray = np.setdiff1d(
-                    move.unique_labels, filtered_displaced_labels, assume_unique=True
-                )
-                if len(available_candidates) == 0:
-                    self.register_failure()
-                    continue
+            filtered_displaced_labels = [
+                atom for atom in self.displaced_labels if atom is not None
+            ]
+            available_candidates = np.setdiff1d(
+                move.unique_labels, filtered_displaced_labels, assume_unique=True
+            )
+            if len(available_candidates) == 0:
+                self.register_failure()
+                continue
 
-                move.to_displace_labels = move.context.rng.choice(available_candidates)
+            move.to_displace_labels = context.rng.choice(available_candidates)
 
-            if move():
+            if move(context):
                 self.register_success(move)
             else:
                 self.register_failure()
 
         return self.number_of_moved_particles > 0
 
-    def register_success(self, move: MoveType) -> None:
+    def register_success(self, move: DisplacementMove) -> None:
         """Register a successful move, saving the current state."""
         self.displaced_labels.append(move.displaced_labels)
-        self.number_of_moved_particles += 1
 
     def register_failure(self) -> None:
         """Register a failed move, reverting any changes made."""
@@ -379,33 +328,15 @@ class CompositeDisplacementMove[MoveType: DisplacementMove[DisplacementContext]]
 
     def reset(self) -> None:
         self.displaced_labels = []
-        self.number_of_moved_particles = 0
 
-    def update(
-        self, indices_to_add: IntegerArray, indices_to_remove: IntegerArray
-    ) -> None:
+    @property
+    def number_of_moved_particles(self) -> int:
         """
-        Update the move by resetting the labels and updating the operation.
+        The number of particles that were moved in the last move.
 
-        Parameters
-        ----------
-        indices_to_add : IntegerArray
-            The indices of the atoms to add.
-        indices_to_remove : IntegerArray
-            The indices of the atoms to remove.
-
-        Raises
-        ------
-        ValueError
-            If the length of the labels is not equal to the number of atoms.
+        Returns
+        -------
+        int
+            The number of particles that were moved.
         """
-        for move in self.moves:
-            move.update(indices_to_add, indices_to_remove)
-
-    def to_dict(self) -> dict[str, Any]:
-        dictionary = super().to_dict()
-        dictionary.setdefault("attributes", {})[
-            "with_replacement"
-        ] = self.with_replacement
-
-        return dictionary
+        return sum(True for label in self.displaced_labels if label is not None)

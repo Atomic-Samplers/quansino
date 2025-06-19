@@ -3,41 +3,40 @@ from __future__ import annotations
 import numpy as np
 from numpy.testing import assert_allclose
 
-from quansino.mc.contexts import StrainContext
+from quansino.mc.contexts import DeformationContext
 from quansino.moves.cell import CellMove
-from quansino.operations.cell import IsotropicStretch
+from quansino.operations.cell import IsotropicDeformation
 
 
 def test_cell_move(bulk_small, rng):
-    move = CellMove(IsotropicStretch(0.1))
+    move = CellMove(IsotropicDeformation(0.1))
 
-    context = StrainContext(bulk_small, rng=rng)
-    move.context = context
+    context = DeformationContext(bulk_small, rng=rng)
 
     old_cell = context.atoms.cell.copy()
     old_positions = context.atoms.positions.copy()
 
-    assert move.attempt_move()
+    assert move.attempt_deformation(context)
 
-    assert move.context.atoms.cell.shape == (3, 3)
+    assert context.atoms.cell.array.shape == (3, 3)
 
-    assert np.all(np.diag(move.context.atoms.cell) != np.diag(old_cell))
-    assert np.any(move.context.atoms.positions != old_positions)
+    assert np.all(np.diag(context.atoms.cell) != np.diag(old_cell))
+    assert np.any(context.atoms.positions != old_positions)
 
-    old_positions = move.context.atoms.positions.copy()
+    old_positions = context.atoms.positions.copy()
 
     move.scale_atoms = False
 
-    assert move.attempt_move()
+    assert move.attempt_deformation(context)
 
-    assert_allclose(move.context.atoms.positions, old_positions)
+    assert_allclose(context.atoms.positions, old_positions)
 
     move.scale_atoms = True
     move.check_move = lambda: False
 
-    old_cell = move.context.atoms.cell.copy()
+    old_cell = context.atoms.cell.copy()
 
-    assert not move.attempt_move()
+    assert not move.attempt_deformation(context)
 
-    assert_allclose(move.context.atoms.cell, old_cell)
-    assert_allclose(move.context.atoms.positions, old_positions)
+    assert_allclose(context.atoms.cell, old_cell)
+    assert_allclose(context.atoms.positions, old_positions)

@@ -13,11 +13,13 @@ from numpy.testing import assert_allclose, assert_array_equal
 from tests.conftest import DummyCalculator, DummyCriteria
 
 from quansino.mc.contexts import ExchangeContext
-from quansino.mc.core import MoveStorage
-from quansino.mc.gcmc import GrandCanonical, GrandCanonicalCriteria
+from quansino.mc.criteria import GrandCanonicalCriteria
+from quansino.mc.gcmc import GrandCanonical
+from quansino.moves.core import CompositeMove
 from quansino.moves.displacement import DisplacementMove
 from quansino.moves.exchange import ExchangeMove
 from quansino.operations.displacement import Translation
+from quansino.utils.moves import MoveStorage
 
 
 def test_grand_canonical(bulk_large):
@@ -31,10 +33,11 @@ def test_grand_canonical(bulk_large):
 
     energy_difference = energy_full - energy_minus_one
 
-    exchange_move = ExchangeMove(Atoms("Cu"), np.arange(len(bulk_large)), Translation())
+    exchange_move = ExchangeMove(np.arange(len(bulk_large)), Translation())
 
     gcmc = GrandCanonical(
         bulk_large,
+        Atoms("Cu"),
         temperature=1000,
         chemical_potential=energy_difference,
         max_cycles=1,
@@ -43,22 +46,24 @@ def test_grand_canonical(bulk_large):
 
     gcmc.add_move(exchange_move)
 
+    assert isinstance(gcmc.moves["default"].criteria, GrandCanonicalCriteria)
+
     assert gcmc.context.temperature == 1000
     assert gcmc.context.chemical_potential == energy_difference
     assert gcmc.max_cycles == 1
     assert gcmc.atoms == bulk_large
 
-    gcmc.chemical_potential = 0.0
+    gcmc.chemical_potential = 100.00
 
-    assert gcmc.chemical_potential == 0.0
-    assert gcmc.context.chemical_potential == 0.0
+    assert gcmc.chemical_potential == 100.0
+    assert gcmc.context.chemical_potential == 100.0
 
     gcmc.temperature = 2000
 
     assert gcmc.temperature == 2000
     assert gcmc.context.temperature == 2000
 
-    gcmc.chemical_potential = energy_difference * 1.56
+    # gcmc.chemical_potential = energy_difference * 1.56
 
     del bulk_large[20]
     del bulk_large[10]
@@ -73,39 +78,22 @@ def test_grand_canonical(bulk_large):
     exchange_move.set_labels(np.arange(len(bulk_large)))
 
     current_atoms_count = len(bulk_large)
+
+    assert isinstance(gcmc.moves["default"].move, ExchangeMove)
+
     labels = np.array(gcmc.moves["default"].move.labels)
 
-    for _ in gcmc.irun(10):
+    for _ in gcmc.srun(10):
+
         assert gcmc.temperature == 2000
         assert gcmc.context.temperature == 2000
-        assert gcmc.chemical_potential == energy_difference * 1.56
-        assert gcmc.context.chemical_potential == energy_difference * 1.56
 
         if len(gcmc.atoms) != current_atoms_count:
-            assert bool(gcmc.context.added_atoms) ^ bool(gcmc.context.deleted_atoms)
+            assert not bool(gcmc.context._added_atoms)
+            assert not bool(gcmc.context._deleted_atoms)
             assert len(bulk_large) == gcmc.context.number_of_exchange_particles
-            assert len(bulk_large) == current_atoms_count + gcmc.context.particle_delta
-
+            assert abs(current_atoms_count - len(bulk_large)) == 1
             assert gcmc.context.accessible_volume == bulk_large.cell.volume
-
-            if gcmc.context.added_atoms:
-                assert gcmc.context.particle_delta == len(gcmc.context.added_atoms)
-                assert len(gcmc.context.added_indices) == len(gcmc.context.added_atoms)
-
-                assert len(labels) + len(gcmc.context.added_indices) == len(
-                    gcmc.moves["default"].move.labels
-                )
-                assert max(labels) + 1 in gcmc.moves["default"].move.labels
-            elif gcmc.context.deleted_atoms:
-                assert gcmc.context.particle_delta == -len(gcmc.context.deleted_atoms)
-                assert len(gcmc.context.deleted_indices) == len(
-                    gcmc.context.deleted_atoms
-                )
-
-                assert (
-                    labels[gcmc.context.deleted_indices]
-                    not in gcmc.moves["default"].move.labels
-                )
 
             current_atoms_count = len(gcmc.atoms)
             labels = np.array(gcmc.moves["default"].move.labels)
@@ -130,20 +118,22 @@ def test_grand_canonical_simulation(bulk_medium):
 
     move_storage = MoveStorage(
         DisplacementMove(np.arange(len(bulk_medium))),
+        GrandCanonicalCriteria(),
         10,
         0.5,
         1,
-        GrandCanonicalCriteria(),
     )
 
-    gcmc = GrandCanonical(
+    gcmc = GrandCanonical[DisplacementMove, GrandCanonicalCriteria](
         bulk_medium,
+        Atoms("Cu"),
         temperature=1000,
         chemical_potential=energy_difference,
         max_cycles=1,
-        default_exchange_move=move_storage,
         number_of_exchange_particles=len(bulk_medium),
     )
+
+    gcmc.moves["default_exchange_move"] = move_storage
 
     assert gcmc.moves["default_exchange_move"].move == move_storage.move
     assert gcmc.moves["default_exchange_move"].interval == 10
@@ -154,10 +144,11 @@ def test_grand_canonical_simulation(bulk_medium):
 
     labels = np.arange(len(bulk_medium))
     labels[: len(labels) // 2] = -1
-    exchange_move = ExchangeMove(Atoms("Cu"), labels)
+    exchange_move = ExchangeMove(labels)
 
     gcmc = GrandCanonical(
         bulk_medium,
+        Atoms("Cu"),
         temperature=1000,
         chemical_potential=energy_difference,
         max_cycles=1,
@@ -168,6 +159,8 @@ def test_grand_canonical_simulation(bulk_medium):
 
     for index in range(10):
         gcmc.add_move(copy(displacement_move), name=f"displacement_{index}")
+
+    assert isinstance(gcmc.moves["displacement_0"].move, DisplacementMove)
 
     gcmc.moves["displacement_0"].move.set_labels(labels)
     gcmc.moves["displacement_0"].move.default_label = -1
@@ -198,39 +191,24 @@ def test_grand_canonical_simulation(bulk_medium):
     old_atoms = bulk_medium.copy()
     old_energy = bulk_medium.get_potential_energy()
 
-    for _ in gcmc.irun(10):
+    for _ in gcmc.srun(10):
         assert gcmc.temperature == 2000
         assert gcmc.context.temperature == 2000
         assert gcmc.chemical_potential == energy_difference * 1.56
         assert gcmc.context.chemical_potential == energy_difference * 1.56
 
         if len(gcmc.atoms) != current_atoms_count:
-            assert bool(gcmc.context.added_atoms) ^ bool(gcmc.context.deleted_atoms)
+            assert not bool(gcmc.context._added_atoms)
+            assert not bool(gcmc.context._deleted_atoms)
             assert len(bulk_medium) == gcmc.context.number_of_exchange_particles
-            assert len(bulk_medium) == current_atoms_count + gcmc.context.particle_delta
+            assert abs(len(bulk_medium) - current_atoms_count) == 1
 
             assert gcmc.context.accessible_volume == bulk_medium.cell.volume
 
-            if gcmc.context.added_atoms:
-                assert gcmc.context.particle_delta == len(gcmc.context.added_atoms)
-                assert len(gcmc.context.added_indices) == len(gcmc.context.added_atoms)
-
-                assert len(labels) + len(gcmc.context.added_indices) == len(
-                    gcmc.moves["default_exchange_move"].move.labels
-                )
-                assert (
-                    max(labels) + 1 in gcmc.moves["default_exchange_move"].move.labels
-                )
-            elif gcmc.context.deleted_atoms:
-                assert gcmc.context.particle_delta == -len(gcmc.context.deleted_atoms)
-                assert len(gcmc.context.deleted_indices) == len(
-                    gcmc.context.deleted_atoms
-                )
-
-                assert (
-                    labels[gcmc.context.deleted_indices]
-                    not in gcmc.moves["default_exchange_move"].move.labels
-                )
+            assert len(gcmc.context._deleted_indices) == 0
+            assert len(gcmc.context._added_indices) == 0
+            assert len(gcmc.context._added_atoms) == 0
+            assert len(gcmc.context._deleted_atoms) == 0
 
             current_atoms_count = len(gcmc.atoms)
             labels = np.array(gcmc.moves["default_exchange_move"].move.labels)
@@ -259,21 +237,23 @@ def test_grand_canonical_atomic_simulation(empty_atoms, rng):
     initial_position = rng.uniform(-50, 50, (1, 3))
     exchange_atoms = Atoms("H", positions=initial_position)
 
-    move = ExchangeMove(exchange_atoms=exchange_atoms, labels=[])
-    move_storage = MoveStorage(move, 0, 0, 0, DummyCriteria())
+    move = ExchangeMove(labels=[])
 
     gcmc = GrandCanonical(
         empty_atoms,
+        exchange_atoms,
         temperature=1000,
         chemical_potential=0.0,
         max_cycles=1,
         number_of_exchange_particles=len(empty_atoms),
-        default_exchange_move=move_storage,
+        default_exchange_move=move,
     )
+
+    gcmc.moves["default_exchange_move"].criteria = DummyCriteria()
 
     move.bias_towards_insert = 1.0
 
-    assert move()
+    assert move(gcmc.context)
 
     assert len(empty_atoms) == 1
     assert_allclose(empty_atoms.positions, np.zeros((1, 3)))
@@ -290,13 +270,13 @@ def test_grand_canonical_atomic_simulation(empty_atoms, rng):
     move.check_move = lambda: False
 
     for _ in range(10):
-        assert not move()
+        assert not move(gcmc.context)
         assert empty_atoms == old_atoms
 
     move.check_move = lambda: True
 
     for _ in range(100):
-        assert move()
+        assert move(gcmc.context)
         gcmc.revert_state()
         assert empty_atoms == old_atoms
 
@@ -305,11 +285,11 @@ def test_grand_canonical_atomic_simulation(empty_atoms, rng):
     assert_allclose(empty_atoms.get_positions(), old_positions)
 
     for _ in range(100):
-        assert move()
+        assert move(gcmc.context)
         gcmc.save_state()
 
-    assert move.context.added_indices is not None
-    assert len(move.context.deleted_indices) == 0
+    assert gcmc.context._added_indices is not None
+    assert len(gcmc.context._deleted_indices) == 0
     assert len(empty_atoms) == 101
     assert len(move.labels) == len(empty_atoms)
     assert_array_equal(move.labels, list(np.arange(101)))
@@ -318,22 +298,23 @@ def test_grand_canonical_atomic_simulation(empty_atoms, rng):
 
     old_atoms = empty_atoms.copy()
 
-    move.to_delete_indices = 0
-    assert move()
+    move.to_delete_label = 0
 
-    assert len(move.context.added_indices) == 0
-    assert len(move.context.deleted_indices) == 1
-    assert move.context.deleted_indices == 0
-    assert len(move.context.deleted_atoms) == 1
+    assert move(gcmc.context)
 
-    old_deleted_atoms = deepcopy(move.context.deleted_atoms)
+    assert len(gcmc.context._added_indices) == 0
+    assert len(gcmc.context._deleted_indices) == 1
+    assert gcmc.context._deleted_indices == 0
+    assert len(gcmc.context._deleted_atoms) == 1
 
-    move.context.deleted_atoms = Atoms()
+    old__deleted_atoms = deepcopy(gcmc.context._deleted_atoms)
+
+    gcmc.context._deleted_atoms = Atoms()
 
     with pytest.raises(ValueError):
         gcmc.revert_state()
 
-    move.context.deleted_atoms = old_deleted_atoms
+    gcmc.context._deleted_atoms = old__deleted_atoms
 
     gcmc.revert_state()
     assert empty_atoms == old_atoms
@@ -341,68 +322,70 @@ def test_grand_canonical_atomic_simulation(empty_atoms, rng):
     move.set_labels(np.full(101, -1))
 
     for _ in range(100):
-        assert not move()
+        assert not move(gcmc.context)
         assert empty_atoms == old_atoms
 
     move.set_labels(np.arange(101))
 
     for _ in range(100):
-        assert move()
+        assert move(gcmc.context)
         gcmc.revert_state()
         assert empty_atoms == old_atoms
 
     while len(move.labels) > 1:
         if rng.random() < 0.7:
             to_delete = rng.choice(move.unique_labels).astype(int)
-            move.to_delete_indices = to_delete
+            move.to_delete_label = to_delete
             is_deletion = True
         else:
             move.to_add_atoms = Atoms("C", positions=[[0, 0, 0]], cell=np.eye(3) * 20)
             is_deletion = False
 
-        assert move()
+        assert move(gcmc.context)
         gcmc.save_state()
 
         if is_deletion:
-            assert move.context.deleted_indices is not None
-            assert move.to_delete_indices is None
+            assert gcmc.context._deleted_indices is not None
+            assert move.to_delete_label is None
 
             assert not np.isin(move.labels, to_delete).any()  # type: ignore
         else:
-            assert_allclose(move.context.atoms.cell.array, np.eye(3) * 100)
-            assert move.context.added_indices is not None
+            assert_allclose(gcmc.context.atoms.cell.array, np.eye(3) * 100)
+            assert gcmc.context._added_indices is not None
             assert move.to_add_atoms is None
 
 
 def test_grand_canonical_molecular_simulation(empty_atoms, rng):
-    move = ExchangeMove("H2O", [])
-    exchange_atoms = move.exchange_atoms
+    exchange_atoms = molecule("H2O")
+    move = ExchangeMove([])
 
     old_distance = np.linalg.norm(
         exchange_atoms.positions[:, None] - exchange_atoms.positions, axis=-1
     )
 
-    move_storage = MoveStorage(move, 0, 0, 0, DummyCriteria())
+    move_storage = MoveStorage(move, DummyCriteria(), 0, 0, 0)
 
     gcmc = GrandCanonical(
         empty_atoms,
+        exchange_atoms,
         temperature=1000,
         chemical_potential=0.0,
         max_cycles=1,
         number_of_exchange_particles=len(empty_atoms),
-        default_exchange_move=move_storage,
     )
 
-    move.bias_towards_insert = 1.0
+    gcmc.moves["default_exchange_move"] = move_storage
 
-    move.to_delete_indices = -1
+    move.bias_towards_insert = 0.0
 
-    assert not move()
+    move.to_delete_label = -1
+
+    assert not move(gcmc.context)
     assert len(empty_atoms) == 0
 
     move.to_add_atoms = exchange_atoms
 
-    assert move()
+    assert move(gcmc.context)
     assert len(empty_atoms) == 3
     gcmc.save_state()
 
@@ -418,17 +401,19 @@ def test_grand_canonical_molecular_simulation(empty_atoms, rng):
 
     old_atoms = empty_atoms.copy()
 
+    move.bias_towards_insert = 1.0
+
     for _ in range(1000):
-        assert move()
+        assert move(gcmc.context)
         gcmc.revert_state()
         assert empty_atoms == old_atoms
 
     for _ in range(100):
-        assert move()
+        assert move(gcmc.context)
         gcmc.save_state()
 
-    assert move.context.added_indices is not None
-    assert len(move.context.deleted_atoms) == 0
+    assert gcmc.context._added_indices is not None
+    assert len(gcmc.context._deleted_atoms) == 0
     assert len(empty_atoms) == 303
 
     move.bias_towards_insert = 0.0
@@ -436,7 +421,7 @@ def test_grand_canonical_molecular_simulation(empty_atoms, rng):
     old_atoms = empty_atoms.copy()
 
     for _ in range(100):
-        assert move()
+        assert move(gcmc.context)
         gcmc.revert_state()
         assert empty_atoms == old_atoms
 
@@ -444,12 +429,12 @@ def test_grand_canonical_molecular_simulation(empty_atoms, rng):
 
     while len(move.unique_labels) > 0:
         to_delete = rng.choice(move.unique_labels)
-        move.to_delete_indices = to_delete
-        assert move()
+        move.to_delete_label = to_delete
+        assert move(gcmc.context)
         gcmc.save_state()
 
-        assert move.context.deleted_indices is not None
-        assert move.to_delete_indices is None
+        assert gcmc.context._deleted_indices is not None
+        assert move.to_delete_label is None
         assert not np.isin(move.unique_labels, to_delete).any()
 
 
@@ -458,6 +443,7 @@ def test_displacement_consistency_manually(bulk_small):
 
     gcmc = GrandCanonical(
         bulk_small,
+        Atoms("H"),
         temperature=1000,
         chemical_potential=0.0,
         max_cycles=1,
@@ -466,11 +452,11 @@ def test_displacement_consistency_manually(bulk_small):
     )
 
     for _ in range(100):
-        assert move()
+        assert move(gcmc.context)
         bulk_small.get_potential_energy()
         gcmc.save_state()
         assert gcmc.last_results == bulk_small.calc.results
-        assert move()
+        assert move(gcmc.context)
         gcmc.revert_state()
         assert len(bulk_small.calc.check_state(bulk_small)) == 0
         assert (
@@ -484,6 +470,7 @@ def test_displacement_consistency_manually_2(bulk_small):
 
     gcmc = GrandCanonical(
         bulk_small,
+        exchange_atoms=Atoms("H"),
         temperature=1000,
         chemical_potential=0.0,
         max_cycles=5,
@@ -494,7 +481,7 @@ def test_displacement_consistency_manually_2(bulk_small):
     old_atoms = bulk_small.copy()
 
     for _ in range(100):
-        assert move()
+        assert move(gcmc.context)
         gcmc.revert_state()
         assert bulk_small == old_atoms
 
@@ -509,25 +496,26 @@ def test_exchange_consistency_manually(empty_atoms, rng):
 
     empty_atoms.set_positions(rng.uniform(-50, 50, (100, 3)))
 
-    move = ExchangeMove(exchange_atoms, np.arange(100), Translation())
+    move = ExchangeMove(np.arange(100), Translation())
 
-    move_storage = MoveStorage(move, 0, 0, 0, DummyCriteria())
+    GrandCanonical.default_criteria[ExchangeMove] = DummyCriteria
 
     gcmc = GrandCanonical(
         empty_atoms,
+        exchange_atoms,
         temperature=1000,
         chemical_potential=0.0,
         max_cycles=1,
         number_of_exchange_particles=len(empty_atoms),
-        default_exchange_move=move_storage,
+        default_exchange_move=move,
     )
 
     for _ in range(100):
-        assert move()
+        assert move(gcmc.context)
         empty_atoms.get_potential_energy()
         gcmc.save_state()
         assert gcmc.last_results == empty_atoms.calc.results
-        assert move()
+        assert move(gcmc.context)
         gcmc.revert_state()
         assert len(empty_atoms.calc.check_state(empty_atoms)) == 0
         assert (
@@ -555,15 +543,9 @@ def test_grand_canonical_criteria(rng):
 
     context.temperature = 298
 
-    with pytest.raises(ValueError):
-        GrandCanonicalCriteria().evaluate(context)
-
-    context.added_atoms = Atoms("Cu")
+    context._added_atoms = Atoms("Cu")
 
     criteria = GrandCanonicalCriteria()
-
-    assert criteria.evaluate(context)
-
     dihydrogen = molecule("H2")
 
     debroglie_wavelength = (
@@ -585,7 +567,8 @@ def test_grand_canonical_criteria(rng):
 
     assert np.allclose(debroglie_wavelength, 0.71228)  # Wikipedia
 
-    context.added_atoms = dihydrogen
+    context.exchange_atoms = dihydrogen
+    context.particle_delta = 1
 
     probability = context.accessible_volume / (
         debroglie_wavelength**3 * (context.number_of_exchange_particles + 1)
@@ -607,4 +590,116 @@ def test_grand_canonical_criteria(rng):
     criteria.evaluate(context)
 
     successes = sum(criteria.evaluate(context) for _ in range(100000))
+
     assert np.allclose(successes / 100000, probability, atol=0.01)
+
+
+def test_grand_canonical_restart(bulk_small, tmp_path, rng):
+    """Test that the Canonical class restart works as expected."""
+    displacement_move = DisplacementMove([0, 1, -1, -1]) + DisplacementMove(
+        [2, 3, -1, -1]
+    )
+    exchange_move = ExchangeMove(np.arange(len(bulk_small)), Translation())
+
+    move = displacement_move + exchange_move
+
+    assert type(move) is CompositeMove
+
+    mc = GrandCanonical(
+        bulk_small,
+        Atoms("Cu"),
+        temperature=10000.0,
+        chemical_potential=100,
+        max_cycles=1,
+        logfile=tmp_path / "mc.log",
+        trajectory=tmp_path / "mc.xyz",
+        restart_file=tmp_path / "mc_restart.json",
+        logging_interval=5,
+    )
+
+    mc.add_move(move, criteria=GrandCanonicalCriteria(), name="default")
+
+    data = mc.to_dict()
+
+    reconstructed_mc = GrandCanonical.from_dict(data)
+    reconstructed_mc.atoms.calc = bulk_small.calc  # calc are not serialized...
+
+    assert reconstructed_mc.atoms == mc.atoms
+    assert reconstructed_mc.temperature == mc.temperature
+    assert reconstructed_mc.chemical_potential == mc.chemical_potential
+    assert reconstructed_mc.max_cycles == mc.max_cycles
+    assert reconstructed_mc.step_count == mc.step_count
+
+    assert reconstructed_mc.last_results == mc.last_results
+    assert np.isnan(reconstructed_mc.context.last_energy)
+    assert_allclose(reconstructed_mc.context.last_positions, mc.context.last_positions)
+    assert reconstructed_mc.moves.keys() == mc.moves.keys()
+
+    assert mc.default_logger is not None
+    assert reconstructed_mc.default_logger is None
+
+    assert mc.default_trajectory is not None
+    assert reconstructed_mc.default_trajectory is None
+
+    assert mc.default_restart is not None
+    assert reconstructed_mc.default_restart is None
+
+    assert reconstructed_mc._MonteCarlo__seed == mc._MonteCarlo__seed  # type: ignore
+    assert reconstructed_mc._rng.bit_generator.state == mc._rng.bit_generator.state
+    assert reconstructed_mc._rng.random() == mc._rng.random()
+    assert reconstructed_mc._rng.integers(0, 100) == mc._rng.integers(0, 100)
+
+    energies = []
+
+    mc.context.last_energy = np.nan
+    reconstructed_mc.context.last_energy = np.nan
+
+    energies = [mc.context.last_energy for _ in mc.irun(20)]
+
+    energies_reconstructed = [
+        reconstructed_mc.context.last_energy for _ in reconstructed_mc.irun(20)
+    ]
+
+    assert_allclose(energies, energies_reconstructed)
+
+    energies = []
+
+    for _ in mc.srun(20):
+        assert len(mc.move_history) == 1
+        assert mc.move_history[0][0] == "default"
+
+        energies.append(mc.context.last_energy)
+
+    energies_reconstructed = []
+
+    i = 0
+    current_mc = reconstructed_mc
+    while i < 20:
+        for _ in range(20 - i):
+            for _ in current_mc.step():
+                ...
+            i += 1
+            energies_reconstructed.append(current_mc.context.last_energy)
+
+            if rng.random() < 0.5:
+                break
+
+        current_mc = GrandCanonical.from_dict(current_mc.to_dict())
+        current_mc.atoms.calc = bulk_small.calc
+
+    assert_allclose(energies, energies_reconstructed)
+
+    mc_reconstructed = GrandCanonical.from_dict(
+        mc.to_dict(),
+        logfile=tmp_path / "mc.log",
+        trajectory=tmp_path / "mc.xyz",
+        restart_file=tmp_path / "mc_restart.json",
+        logging_interval=6,
+        max_cycles=10,
+    )
+
+    assert str(mc_reconstructed.default_logger) == str(mc.default_logger)
+    assert str(mc_reconstructed.default_trajectory) == str(mc.default_trajectory)
+    assert str(mc_reconstructed.default_restart) == str(mc.default_restart)
+    assert mc_reconstructed.logging_interval == 6
+    assert mc_reconstructed.max_cycles == 10

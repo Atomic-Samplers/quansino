@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import numpy as np
-import pytest
 from ase.build import molecule
 from numpy.testing import assert_allclose, assert_array_equal, assert_array_less
 from scipy.stats import chisquare
@@ -10,7 +9,6 @@ from quansino.mc.contexts import DisplacementContext
 from quansino.operations import (
     Ball,
     Box,
-    Operation,
     Rotation,
     Sphere,
     Translation,
@@ -18,7 +16,7 @@ from quansino.operations import (
 )
 
 
-def test_operations(single_atom, rng):
+def test_displacement_operations(single_atom, rng):
     context = DisplacementContext(single_atom, rng)
 
     sphere = Sphere(0.1)
@@ -36,7 +34,7 @@ def test_operations(single_atom, rng):
     assert (np.linalg.norm(ball.calculate(context)) > 0).all()
 
     single_atom.set_cell(np.eye(3) * 100)
-    context.moving_indices = [0]
+    context._moving_indices = [0]
 
     translation = Translation()
     assert translation.calculate(context).shape == (1, 3)
@@ -56,7 +54,7 @@ def test_operations(single_atom, rng):
         context.atoms.positions[:, None] - context.atoms.positions, axis=-1
     )
 
-    context.moving_indices = [0, 1, 2]
+    context._moving_indices = [0, 1, 2]
 
     old_positions = context.atoms.get_positions()
     assert not np.allclose(rotation.calculate(context), 0)
@@ -78,71 +76,6 @@ def test_operations(single_atom, rng):
     )
 
     assert_allclose(old_distances, new_distances_2)
-
-    composite_operation = sphere + box
-
-    assert len(composite_operation) == 2
-
-    assert composite_operation[0] == sphere
-    assert composite_operation[1] == box
-
-    assert composite_operation.calculate(context).shape == (1, 3)
-    assert (np.linalg.norm(composite_operation.calculate(context)) > 0.0).all()
-
-    composite_operation_2 = composite_operation + ball
-    composite_operation_3 = ball + composite_operation
-
-    assert len(composite_operation_2) == 3
-    assert len(composite_operation_3) == 3
-
-    assert composite_operation_2[0] == sphere
-    assert composite_operation_2[1] == box
-    assert composite_operation_2[2] == ball
-
-    assert composite_operation_3[0] == ball
-    assert composite_operation_3[1] == sphere
-    assert composite_operation_3[2] == box
-
-    composite_operation_4 = composite_operation + composite_operation_2
-
-    assert len(composite_operation_4) == 5
-    assert composite_operation_4[0] == sphere
-    assert composite_operation_4[1] == box
-    assert composite_operation_4[2] == sphere
-    assert composite_operation_4[3] == box
-    assert composite_operation_4[4] == ball
-
-    composite_operation_5 = sphere * 5
-
-    assert len(composite_operation_5) == 5
-
-    for move in composite_operation_5:
-        assert move == sphere
-
-    assert composite_operation_5.calculate(context).shape == (1, 3)
-    assert (np.linalg.norm(composite_operation_5.calculate(context)) > 0.0).all()
-
-    with pytest.raises(ValueError):
-        sphere * -2  # type: ignore
-
-    with pytest.raises(ValueError):
-        sphere * 4.2  # type: ignore
-
-    with pytest.raises(ValueError):
-        composite_operation_2 * 0  # type: ignore
-
-    with pytest.raises(ValueError):
-        composite_operation_2 * -1  # type: ignore
-
-    with pytest.raises(ValueError):
-        composite_operation_2 * 4.2  # type: ignore
-
-    composite_operation_6 = composite_operation_2 * 2
-
-    assert len(composite_operation_6) == 6
-
-    for move in composite_operation_6:
-        assert isinstance(move, Operation)
 
 
 def test_box_operation(bulk_small, rng):
@@ -181,7 +114,7 @@ def test_translation_operation(single_atom, rng):
     operation = Translation()
     context = DisplacementContext(single_atom, rng)
 
-    context.moving_indices = [0]
+    context._moving_indices = [0]
 
     positions_recording = []
 
@@ -200,7 +133,7 @@ def test_translation_operation(single_atom, rng):
 
 def test_rotation_operation(single_atom, rng):
     context = DisplacementContext(single_atom, rng)
-    context.moving_indices = [0]
+    context._moving_indices = [0]
 
     operation = Rotation()
 
@@ -216,7 +149,7 @@ def test_rotation_operation(single_atom, rng):
 
     water = molecule("H2O", vacuum=20)
     context.atoms = water
-    context.moving_indices = [0, 1, 2]
+    context._moving_indices = [0, 1, 2]
 
     original_distances = water.positions[None, :] - water.positions
     original_distances = np.linalg.norm(original_distances, axis=-1)
@@ -237,7 +170,7 @@ def test_rotation_operation(single_atom, rng):
 
 def test_translation_rotation_operation(single_atom, rng):
     context = DisplacementContext(single_atom, rng)
-    context.moving_indices = [0]
+    context._moving_indices = [0]
 
     operation = TranslationRotation()
 
@@ -252,7 +185,7 @@ def test_translation_rotation_operation(single_atom, rng):
 
     water = molecule("H2O", vacuum=20)
     context.atoms = water
-    context.moving_indices = [0, 1, 2]
+    context._moving_indices = [0, 1, 2]
 
     original_distances = water.positions[None, :] - water.positions
     original_distances = np.linalg.norm(original_distances, axis=-1)

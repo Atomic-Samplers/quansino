@@ -1,23 +1,22 @@
 from __future__ import annotations
 
-from math import exp
-
 import numpy as np
+from numpy.testing import assert_allclose
 
-from quansino.mc.contexts import StrainContext
+from quansino.mc.contexts import DeformationContext
 from quansino.operations.cell import (
     AnisotropicDeformation,
-    IsotropicStretch,
-    IsotropicVolume,
+    IsotropicDeformation,
+    ShapeDeformation,
 )
 
 
-def test_isotropic_strain(bulk_small, rng):
+def test_isotropic_deformation(bulk_small, rng):
     """
-    Test the isotropic strain operation.
+    Test the isotropic deformation operation.
     """
-    strain_operation = IsotropicStretch(max_value=1.0)
-    context = StrainContext(bulk_small, rng=rng)
+    strain_operation = IsotropicDeformation(max_value=0.1)
+    context = DeformationContext(bulk_small, rng=rng)
 
     for _ in range(10000):
         deformation_gradient = strain_operation.calculate(context)
@@ -39,58 +38,42 @@ def test_isotropic_strain(bulk_small, rng):
         assert np.all(deformation_gradient <= 2.0)
         assert np.all(deformation_gradient >= 0.0)
 
-
-def test_volume_isotropic_strain(bulk_small, rng):
-    """
-    Test the isotropic strain operation.
-    """
-    strain_operation = IsotropicVolume(max_value=0.05)
-    context = StrainContext(bulk_small, rng=rng)
-
-    for _ in range(10000):
-        deformation_gradient = strain_operation.calculate(context)
-
-        assert deformation_gradient.shape == (3, 3)
-        assert (
-            deformation_gradient[0, 0]
-            == deformation_gradient[1, 1]
-            == deformation_gradient[2, 2]
-        )
-        assert (
-            deformation_gradient[0, 1]
-            == deformation_gradient[0, 2]
-            == deformation_gradient[1, 2]
-            == 0
-        )
-        assert np.linalg.det(deformation_gradient) > 0
-
-        assert deformation_gradient[0, 0] ** (3) < exp(0.05)
-
-        assert np.all(deformation_gradient <= exp(0.05))
-        assert np.all(deformation_gradient >= 0.0)
-
-        current_volume = bulk_small.cell.volume
-
-        bulk_small.set_cell(
-            deformation_gradient @ bulk_small.cell,
-            scale_atoms=True,
-            apply_constraint=False,
+        assert_allclose(
+            deformation_gradient - deformation_gradient.T, 0, atol=1e-12, rtol=0.0
         )
 
-        new_volume = bulk_small.cell.volume
 
-        assert new_volume < current_volume * exp(0.05)
-
-
-def test_anisotropic_strain(bulk_small, rng):
+def test_anisotropic_deformation(bulk_small, rng):
     """
-    Test the isotropic strain operation.
+    Test anisotropic deformation operation.
     """
     strain_operation = AnisotropicDeformation(max_value=1 / 3)
-    context = StrainContext(bulk_small, rng=rng)
+    context = DeformationContext(bulk_small, rng=rng)
 
     for _ in range(10000):
         deformation_gradient = strain_operation.calculate(context)
 
         assert deformation_gradient.shape == (3, 3)
         assert np.linalg.det(deformation_gradient) > 0
+
+        assert_allclose(
+            deformation_gradient - deformation_gradient.T, 0.0, atol=1e-12, rtol=0.0
+        )
+
+
+def test_shape_deformation(bulk_small, rng):
+    """
+    Test the shape deformation operation.
+    """
+    strain_operation = ShapeDeformation(max_value=1 / 3)
+    context = DeformationContext(bulk_small, rng=rng)
+
+    for _ in range(10000):
+        deformation_gradient = strain_operation.calculate(context)
+
+        assert deformation_gradient.shape == (3, 3)
+        assert_allclose(np.linalg.det(deformation_gradient), 1.0, atol=1e-12, rtol=0.0)
+
+        assert_allclose(
+            deformation_gradient - deformation_gradient.T, 0.0, atol=1e-12, rtol=0.0
+        )

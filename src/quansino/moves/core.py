@@ -3,79 +3,137 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self, TypeVar, overload
 
 from quansino.mc.contexts import Context
-from quansino.operations.core import Operation
+from quansino.moves.composite import CompositeMove
+from quansino.protocols import Operation
 from quansino.registry import get_typed_class
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
-class BaseMove[ContextType: Context]:
+    from ase.cell import Cell
+
+    from quansino.protocols import Move
+    from quansino.type_hints import IntegerArray
+
+T = TypeVar("T", bound="BaseMove")
+
+
+class BaseMove[OperationType: Operation, ContextType: Context]:
     """
-    Helper Class to build Monte Carlo moves.
+    Base class to build Monte Carlo moves. This is a generic base class for all Monte Carlo moves, parameterized by the operation type and context type it works with.
 
     Parameters
     ----------
-    operation: Operation
-        The operation to perform in the move. The object must have a `calculate` method that takes a context as input.
-    apply_constraints: bool, optional
+    operation : OperationType | None
+        The operation to perform, by default None. If None, the default operation for the move will be used.
+    apply_constraints : bool, optional
         Whether to apply constraints to the move, by default True.
 
     Attributes
     ----------
-    AcceptableContext : Context
-        The required context class for this move.
     max_attempts : int
         The maximum number of attempts to make for a successful move, default is 10000.
-    operation: Operation
+    operation : OperationType
         The operation to perform in the move.
-    apply_constraints: bool
+    apply_constraints : bool
         Whether to apply constraints to the move.
-    context: ContextType
+    context : ContextType
         The simulation context attached to this move.
+    check_move : Callable[[], bool]
+        A callable that returns True if the move should proceed, False otherwise.
+    composite_move_type : type[CompositeMove]
+        The type of composite move that this move can be combined into.
 
     Notes
     -----
-    This class is a base class for all Monte Carlo moves, and should not be used directly.
-    The __call__ method should be implemented in the subclass, performing the actual move
-    and returning a boolean indicating whether the move was accepted.
+    This class is a base class for all Monte Carlo moves, and should not be used directly. The __call__ method should be implemented in the subclass, performing the actual move and returning a boolean indicating whether the move was accepted. Classes inheriting from `BaseMove` should implement the `default_operation` property to provide a default operation when None is specified during initialization.
     """
 
-    AcceptableContext = Context
-    max_attempts: int = 10000
+    __slots__ = (
+        "apply_constraints",
+        "check_move",
+        "composite_move_type",
+        "context",
+        "max_attempts",
+        "operation",
+    )
 
-    def __init__(self, operation: Operation, apply_constraints: bool = True) -> None:
-        """Initialize the BaseMove object."""
-        self.operation = operation
+    def __init__(
+        self, operation: OperationType | None, apply_constraints: bool = True
+    ) -> None:
+        """Initialize the `BaseMove` object."""
+        self.operation: OperationType = operation or self.default_operation
         self.apply_constraints: bool = apply_constraints
 
-    def attach_simulation(self, context: ContextType) -> None:
+        self.composite_move_type: type[CompositeMove] = CompositeMove[
+            BaseMove[OperationType, ContextType]
+        ]
+
+        self.max_attempts = 10000
+
+        self.check_move: Callable[[], bool] = lambda: True
+
+    def __call__(self, context: ContextType) -> bool:
         """
-        Attach the simulation context to the move. This method must be called before the move is used, and should be used to set the context attribute. This must be done by the Monte Carlo classes.
-
-        Parameters
-        ----------
-        context: Context
-            The simulation context to attach to the move.
-
-        Notes
-        -----
-        The context object aim to provide the necessary information for the move to perform its operation, without having to pass whole objects around. Classes inheriting from BaseMove should define a `AcceptableContext` attribute that specifies the context class that the move requires.
-        """
-        self.context: ContextType = context
-
-    def check_move(self) -> bool:
-        """Check if the move is accepted. This method should be implemented in the subclass, and should return a boolean indicating whether the move was accepted."""
-        return True
-
-    def to_dict(self) -> dict[str, Any]:
-        """
-        Convert the move to a dictionary.
+        Call the move. This method should be implemented in the subclass, and should return a boolean indicating whether the move was accepted.
 
         Returns
         -------
-        dict[str, str | bool]
-            A dictionary representation of the move.
+        bool
+            Whether the move was accepted.
+        """
+        self.operation.calculate(context)
+        return True
+
+    def on_atoms_changed(
+        self, added_indices: IntegerArray, removed_indices: IntegerArray
+    ) -> None:
+        """
+        Update the move when atoms are added or removed.
+
+        Parameters
+        ----------
+        added_indices : IntegerArray
+            The indices of the atoms that were added.
+        removed_indices : IntegerArray
+            The indices of the atoms that were removed.
+        """
+
+    def on_cell_changed(self, new_cell: Cell) -> None:
+        """
+        Update the move when the cell changes.
+
+        Parameters
+        ----------
+        new_cell : Cell
+            The new cell.
+        """
+
+    @property
+    def default_operation(self) -> OperationType:
+        """
+        Get the default operation for the move.
+
+        Returns
+        -------
+        OperationType
+            The default operation for the move.
+        """
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not have a default operation defined."
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert the `BaseMove` object to a dictionary.
+
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary representation of the `BaseMove` object.
         """
         return {
             "name": self.__class__.__name__,
@@ -85,35 +143,20 @@ class BaseMove[ContextType: Context]:
             },
         }
 
-    def __call__(self) -> bool:
-        """
-        Call the move. This method should be implemented in the subclass, and should return a boolean indicating whether the move was accepted.
-
-        Returns
-        -------
-        bool
-            Whether the move was accepted.
-        """
-        if self.check_move():
-            self.operation.calculate(self.context)
-            return True
-        else:
-            return False
-
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
         """
-        Create a move from a dictionary.
+        Create a `BaseMove` object from a dictionary.
 
         Parameters
         ----------
         data : dict[str, Any]
-            The dictionary representation of the move.
+            The dictionary representation of the `BaseMove` object.
 
         Returns
         -------
         Self
-            The move created from the dictionary.
+            The `BaseMove` object created from the dictionary.
         """
         kwargs = deepcopy(data.get("kwargs", {}))
 
@@ -133,75 +176,50 @@ class BaseMove[ContextType: Context]:
 
         return instance
 
+    @overload
+    def __add__(self: T, other: T) -> CompositeMove[T]: ...
 
-class CompositeMove[MoveType: BaseMove]:
-    """
-    Class to perform a composite displacement operation on atoms. This class is returned when adding or multiplying [`DisplacementMove`][quansino.moves.displacement.DisplacementMove] objects together.
+    @overload
+    def __add__(self: T, other: CompositeMove[T]) -> CompositeMove[T]: ...
 
-    Parameters
-    ----------
-    moves : list[DisplacementMove]
-        The moves to perform in the composite move.
+    @overload
+    def __add__(self, other: CompositeMove[Move]) -> CompositeMove[Move]: ...
 
-    Attributes
-    ----------
-    is_updatable : Literal[True]
-        Whether the move can be updated when atoms are added or removed.
-    moves : list[DisplacementMove]
-        The moves to perform in the composite move.
-    displaced_labels : list[int | None]
-        The labels of the atoms that were displaced in the last move.
-    number_of_moved_particles : int
-        The number of particles that were moved in the last move.
-    with_replacement : bool
-        Whether to allow the same label to be displaced multiple times in a single move.
-    """
+    @overload
+    def __add__(self, other: Move) -> CompositeMove[Move]: ...
 
-    def __init__(self, moves: list[MoveType]) -> None:
-        self.moves = moves
-
-    def __call__(self) -> bool:
+    def __add__(self, other) -> CompositeMove:
         """
-        Perform the displacement move. The following steps are performed:
-
-        1. If no candidates are available, return False and does not register a move.
-        2. Check if there are enough candidates to displace. If yes, select `displacements_per_move` number of candidates from the available candidates, if not, select the maximum number of candidates available.
-        3. If `to_displace_labels` is None, select `displacements_per_move` candidates from the available candidates.
-        4. Attempt to move each candidate using `attempt_move`. If any of the moves is successful, register a success and return True. Otherwise, register a failure and return False.
-
-        Returns
-        -------
-        bool
-            Whether the move was valid.
-        """
-        return any(move() for move in self.moves)
-
-    def __add__(self, other: CompositeMove[MoveType] | MoveType) -> Self:
-        """
-        Add two displacement moves together to create a composite move.
+        Add two moves together to create a `CompositeMove`.
 
         Parameters
         ----------
-        other : DisplacementMove
+        other : Move | CompositeMove
             The other displacement move to add.
 
         Returns
         -------
-        CompositeDisplacementMove
+        CompositeMove
             The composite move.
         """
         if isinstance(other, CompositeMove):
-            return type(self)(self.moves + other.moves)
-        else:
-            return type(self)([*self.moves, other])
+            if type(self.composite_move_type) is type(other):
+                return self.composite_move_type([self, *other.moves])
+            else:
+                return CompositeMove([self, *other.moves])
+        elif isinstance(other, BaseMove):
+            if self.composite_move_type is other.composite_move_type:
+                return other.composite_move_type([self, other])
+            else:
+                return CompositeMove([self, other])
 
-    def attach_simulation(self, context: Context) -> None:
-        for move in self.moves:
-            move.attach_simulation(context)
+        raise TypeError(
+            f"Cannot add {self.__class__.__name__} to {other.__class__.__name__}"
+        )
 
-    def __mul__(self, n: int) -> Self:
+    def __mul__(self, n: int) -> CompositeMove[Self]:
         """
-        Multiply the displacement move by an integer to create a composite move.
+        Multiply the move by an integer to create a `CompositeMove` with repeated moves.
 
         Parameters
         ----------
@@ -210,78 +228,25 @@ class CompositeMove[MoveType: BaseMove]:
 
         Returns
         -------
-        CompositeDisplacementMove
+        CompositeMove
             The composite move.
         """
         if n < 1 or not isinstance(n, int):
             raise ValueError(
                 "The number of times the move is repeated must be a positive, non-zero integer."
             )
-        return type(self)(self.moves * n)
 
-    def __getitem__(self, index: int) -> MoveType:
-        """
-        Get the move at the specified index.
-
-        Parameters
-        ----------
-        index : int
-            The index of the move.
-
-        Returns
-        -------
-        DisplacementMove
-            The move at the specified index.
-        """
-        return self.moves[index]
-
-    def __len__(self) -> int:
-        return len(self.moves)
-
-    def __iter__(self):
-        return iter(self.moves)
+        return self.composite_move_type([self] * n)
 
     __rmul__ = __mul__
 
-    __imul__ = __mul__
-
-    def to_dict(self) -> dict[str, Any]:
-        return {
-            "name": self.__class__.__name__,
-            "kwargs": {"moves": [move.to_dict() for move in self.moves]},
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> Self:
+    def __copy__(self) -> Self:
         """
-        Create a composite operation from a dictionary.
-
-        Parameters
-        ----------
-        data : dict[str, Any]
-            The dictionary representation of the operation.
+        Create a shallow copy of the move.
 
         Returns
         -------
-        CompositeOperation
-            The composite operation object created from the dictionary.
+        Self
+            The shallow copy of the move.
         """
-        moves = []
-        kwargs = deepcopy(data.get("kwargs", {}))
-
-        if "moves" in kwargs:
-            for move_data in kwargs["moves"]:
-                move_class: type[BaseMove] = get_typed_class(
-                    move_data["name"], BaseMove
-                )
-                move = move_class.from_dict(move_data)
-                moves.append(move)
-
-        kwargs["moves"] = moves
-
-        instance = cls(**kwargs)
-
-        for key, value in data.get("attributes", {}).items():
-            setattr(instance, key, value)
-
-        return instance
+        return self.from_dict(self.to_dict())

@@ -1,29 +1,37 @@
 from __future__ import annotations
 
 from math import exp
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
+from scipy.linalg import expm
 
-from quansino.operations.core import Operation
+from quansino.operations.core import BaseOperation
+
+if TYPE_CHECKING:
+    from quansino.mc.contexts import Context
+    from quansino.type_hints import Deformation
 
 
-class StrainOperation(Operation):
+class DeformationOperation(BaseOperation):
     """
-    Base class for strain operations that modify the simulation cell.
+    Base class for deformation operations that may modify the simulation cell or atoms' positions.
 
     Parameters
     ----------
     max_value : float
-        The maximum strain value for the operation, determines the magnitude of cell deformation.
+        The maximum deformation value for the operation, determines the magnitude of the deformation.
 
     Attributes
     ----------
     max_value : float
-        The maximum strain parameter controlling the deformation magnitude.
+        The maximum deformation parameter controlling the deformation magnitude.
     """
 
+    __slots__ = ("max_value",)
+
     def __init__(self, max_value: float) -> None:
+        """Initialize the `DeformationOperation` object."""
         self.max_value = max_value
 
     def to_dict(self) -> dict[str, Any]:
@@ -38,94 +46,106 @@ class StrainOperation(Operation):
         return {**super().to_dict(), "kwargs": {"max_value": self.max_value}}
 
 
-class AnisotropicDeformation(StrainOperation):
+class AnisotropicDeformation(DeformationOperation):
     """
-    Class for anisotropic strain operations that can deform the cell differently along each axis.
+    Class for anisotropic deformation operation that can deform the cell differently along each axis.
 
-    This operation applies a strain tensor with randomly generated components to the simulation cell.
-    To preserve the orientation of the unit cell, the deformation gradient tensor (F) should be
-    positive definite, i.e., det(F) > 0. To ensure this, the `max_value` attribute should
-    be less than 1/3.
-
-    Parameters
-    ----------
-    max_value : float
-        The maximum strain value for individual tensor components.
-
-    Returns
-    -------
-    numpy.ndarray
-        A 3x3 strain tensor to apply to the simulation cell.
+    This operation applies a deformation tensor with randomly generated components to the simulation cell. The tensor is constructed using exponential mapping to ensure that the resulting deformation is positive definite. If max_value is large, the true maximum component values may exceed it, use with caution.
     """
 
-    def calculate(self, context):
-        strain_tensor = np.eye(3)
+    def calculate(self, context: Context) -> Deformation:
+        """
+        Calculate an anisotropic deformation tensor.
+
+        Parameters
+        ----------
+        context : Context
+            The simulation context.
+
+        Returns
+        -------
+        Deformation
+            A 3x3 deformation tensor.
+        """
+        deformation_tensor = np.zeros((3, 3), dtype=np.float64)
         components = context.rng.uniform(-self.max_value, self.max_value, size=6)
 
-        strain_tensor[0, 0] += components[0]
-        strain_tensor[1, 1] += components[1]
-        strain_tensor[2, 2] += components[2]
+        deformation_tensor[0, 0] = components[0]
+        deformation_tensor[1, 1] = components[1]
+        deformation_tensor[2, 2] = components[2]
 
-        strain_tensor[0, 1] = components[3]
-        strain_tensor[0, 2] = components[4]
-        strain_tensor[1, 2] = components[5]
+        deformation_tensor[0, 1] = components[3]
+        deformation_tensor[0, 2] = components[4]
+        deformation_tensor[1, 2] = components[5]
 
-        strain_tensor[1, 0] = strain_tensor[0, 1]
-        strain_tensor[2, 0] = strain_tensor[0, 2]
-        strain_tensor[2, 1] = strain_tensor[1, 2]
+        deformation_tensor[1, 0] = deformation_tensor[0, 1]
+        deformation_tensor[2, 0] = deformation_tensor[0, 2]
+        deformation_tensor[2, 1] = deformation_tensor[1, 2]
 
-        return strain_tensor
+        return expm(deformation_tensor)
 
 
-class IsotropicStretch(StrainOperation):
+class ShapeDeformation(DeformationOperation):
     """
-    Class for isotropic strain operations that stretch or compress the cell equally in all directions.
+    Class for anisotropic deformation operations that can deform the cell differently along each axis.
 
-    This operation applies the same strain value to all diagonal components of the strain tensor,
-    resulting in uniform scaling of the simulation cell.
-
-    Parameters
-    ----------
-    max_value : float
-        The maximum strain value to apply.
-
-    Returns
-    -------
-    numpy.ndarray
-        A 3x3 strain tensor with identical diagonal elements.
+    This operation applies a deformation tensor with randomly generated components to the simulation cell.
+    The tensor is constructed using exponential mapping to ensure that the resulting deformation is positive definite. If max_value is large, the true maximum component values may exceed it, use with caution.
     """
 
-    def calculate(self, context):
-        strain = np.eye(3)
-        value = context.rng.uniform(-self.max_value, self.max_value)
+    def calculate(self, context: Context) -> Deformation:
+        """
+        Calculate a volume preserving, anisotropic deformation tensor.
 
-        strain[0, 0] += value
-        strain[1, 1] += value
-        strain[2, 2] += value
+        Parameters
+        ----------
+        context : Context
+            The simulation context.
 
-        return strain
+        Returns
+        -------
+        Deformation
+            A 3x3 deformation tensor.
+        """
+        deformation_tensor = np.zeros((3, 3), dtype=np.float64)
+        components = context.rng.uniform(-self.max_value, self.max_value, size=6)
+
+        deformation_tensor[0, 1] = components[3]
+        deformation_tensor[0, 2] = components[4]
+        deformation_tensor[1, 2] = components[5]
+
+        deformation_tensor[1, 0] = deformation_tensor[0, 1]
+        deformation_tensor[2, 0] = deformation_tensor[0, 2]
+        deformation_tensor[2, 1] = deformation_tensor[1, 2]
+
+        diag_mean = (components[0] + components[1] + components[2]) / 3.0
+
+        deformation_tensor[0, 0] = components[0] - diag_mean
+        deformation_tensor[1, 1] = components[1] - diag_mean
+        deformation_tensor[2, 2] = components[2] - diag_mean
+
+        return expm(deformation_tensor)
 
 
-class IsotropicVolume(StrainOperation):
+class IsotropicDeformation(DeformationOperation):
     """
-    Class for isotropic volume changes that preserve the cell shape while changing its volume.
+    Class for isotropic deformation operations that stretch or compress the cell equally in all directions.
 
-    This operation applies an exponential transformation to ensure positive volume changes
-    and provides a uniform scaling factor for the simulation cell in all directions.
-
-    Parameters
-    ----------
-    max_value : float
-        The maximum logarithmic volume change.
-
-    Returns
-    -------
-    numpy.ndarray
-        A 3x3 diagonal matrix with identical scaling factors on the diagonal.
+    This operation applies the same deformation value to all diagonal components of the deformation tensor, resulting in uniform scaling of the simulation cell.
     """
 
-    def calculate(self, context):
-        deformation_value = context.rng.uniform(-self.max_value, self.max_value)
-        deformation_value = exp(deformation_value) ** (1.0 / 3.0)
+    def calculate(self, context: Context) -> Deformation:
+        """
+        Calculate an isotropic stretch deformation tensor.
 
-        return np.eye(3) * deformation_value
+        Parameters
+        ----------
+        context : Context
+            The simulation context.
+
+        Returns
+        -------
+        Deformation
+            A 3x3 deformation tensor with identical diagonal elements.
+        """
+        return np.eye(3) * exp(context.rng.uniform(-self.max_value, self.max_value))

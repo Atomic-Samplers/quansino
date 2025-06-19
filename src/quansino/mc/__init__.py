@@ -5,28 +5,31 @@ from __future__ import annotations
 from quansino.mc.canonical import Canonical
 from quansino.mc.contexts import (
     Context,
+    DeformationContext,
     DisplacementContext,
     ExchangeContext,
-    StrainContext,
 )
-from quansino.mc.core import MonteCarlo, MoveStorage
+from quansino.mc.core import MonteCarlo
 from quansino.mc.criteria import (
+    BaseCriteria,
     CanonicalCriteria,
-    Criteria,
     GrandCanonicalCriteria,
     IsobaricCriteria,
 )
+from quansino.mc.driver import Driver
 from quansino.mc.fbmc import ForceBias
 from quansino.mc.gcmc import GrandCanonical
 from quansino.mc.isobaric import Isobaric
 from quansino.registry import register_class
 
 __all__ = [
+    "BaseCriteria",
     "Canonical",
     "CanonicalCriteria",
     "Context",
-    "Criteria",
+    "DeformationContext",
     "DisplacementContext",
+    "Driver",
     "ExchangeContext",
     "ForceBias",
     "GrandCanonical",
@@ -34,8 +37,6 @@ __all__ = [
     "Isobaric",
     "IsobaricCriteria",
     "MonteCarlo",
-    "MoveStorage",
-    "StrainContext",
 ]
 
 mc_registry = {
@@ -45,12 +46,11 @@ mc_registry = {
     "ForceBias": ForceBias,
     "DisplacementContext": DisplacementContext,
     "ExchangeContext": ExchangeContext,
-    "StrainContext": StrainContext,
+    "DeformationContext": DeformationContext,
     "CanonicalCriteria": CanonicalCriteria,
     "IsobaricCriteria": IsobaricCriteria,
     "GrandCanonicalCriteria": GrandCanonicalCriteria,
     "MonteCarlo": MonteCarlo,
-    "MoveStorage": MoveStorage,
 }
 
 for name, mc_class in mc_registry.items():

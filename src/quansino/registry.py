@@ -1,8 +1,20 @@
-"""Module for Class registry serialization/deserialization of simulation objects."""
+"""
+Module for Class registry serialization/deserialization of simulation objects.
+
+This module essentially provides a way to register classes with a name, retrieve them by name. This is useful for serialization and deserialization of custom simulation objects, allowing them to be stored and retrieved without needing to know their exact class at runtime. Users can register their custom classes in their code, which will then be available globally for serialization and deserialization purposes via their `__class__.__name__` attribute.
+
+Users should avoid using the `__class_registry` global variable directly, and instead use the provided functions to register and retrieve classes. This ensures that the registry is used correctly and avoids potential issues with bad scoping or name collisions.
+"""
 
 from __future__ import annotations
 
-_class_registry = {}
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+
+__class_registry = {}
 
 
 def register_class(cls: type, class_name: str | None = None) -> type:
@@ -13,33 +25,52 @@ def register_class(cls: type, class_name: str | None = None) -> type:
     ----------
     cls : type
         The class to register.
-    class_name : str, optional
-        The name to register the class with. If None, the class name is used.
+    class_name : str | None, optional
+        The name to register the class with, by default None. If None, `cls.__name__` is used.
 
     Returns
     -------
     type
-        The registered class (for method chaining).
+        The registered class.
     """
     if class_name is None:
         class_name = cls.__name__
 
-    _class_registry[class_name] = cls
+    __class_registry[class_name] = cls
 
     return cls
 
 
-def register(class_name=None):
+def register(class_name: str | None = None) -> Callable[[type], type]:
     """
     Decorator to register a class with a name.
 
     Parameters
     ----------
-    class_name : str, optional
-        The name to register the class with. If None, the class name is used.
+    class_name : str | None, optional
+        The name to register the class with, by default None. If None, `cls.__name__` is used.
+
+    Returns
+    -------
+    Callable[[type], type]
+        A decorator that registers the class with the given name.
     """
 
-    def decorator(cls):
+    def decorator(cls: type) -> type:
+        """
+        Decorator function to register a class with a name
+        when the class is defined.
+
+        Parameters
+        ----------
+        cls : type
+            The class to register.
+
+        Returns
+        -------
+        type
+            The registered class.
+        """
         return register_class(cls, class_name)
 
     return decorator
@@ -56,7 +87,7 @@ def get_class(class_name: str) -> type:
 
     Returns
     -------
-    class
+    type
         The class registered with the given name.
 
     Raises
@@ -64,15 +95,15 @@ def get_class(class_name: str) -> type:
     KeyError
         If the class is not registered.
     """
-    if class_name not in _class_registry:
+    if class_name not in __class_registry:
         raise KeyError(
-            f"Class `{class_name}` not registered in the global registry. Available classes: {list(_class_registry.keys())}"
+            f"Class `{class_name}` not registered in the global registry. Available classes: {list(__class_registry.keys())}"
         )
 
-    return _class_registry[class_name]
+    return __class_registry[class_name]
 
 
-def get_class_name(cls: type) -> str | None:
+def get_class_name(cls: type) -> str:
     """
     Get the registered name of a class.
 
@@ -83,19 +114,26 @@ def get_class_name(cls: type) -> str | None:
 
     Returns
     -------
-    str | None
+    str
         The registered name of the class, or None if not found.
+
+    Raises
+    ------
+    KeyError
+        If the class is not registered.
     """
-    for name, registered_cls in _class_registry.items():
+    for name, registered_cls in __class_registry.items():
         if registered_cls is cls:
             return name
 
-    return None
+    raise KeyError(
+        f"Class `{cls.__name__}` not found in the global registry. Available classes: {list(__class_registry.values())}"
+    )
 
 
 def get_typed_class(name: str, expected_base: type) -> type:
     """
-    Get a class by its registered name with type checking.
+    Get a class by its registered name with runtime type checking.
 
     Parameters
     ----------
@@ -111,8 +149,6 @@ def get_typed_class(name: str, expected_base: type) -> type:
 
     Raises
     ------
-    KeyError
-        If the class is not registered.
     TypeError
         If the registered class is not a subclass of expected_base.
     """
