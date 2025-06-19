@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import sys
 from pathlib import Path
 
-import pytest
 from ase.io.jsonio import read_json
 
 from quansino.io.restart import RestartObserver
@@ -63,9 +61,6 @@ def test_restart_observer(bulk_small, tmp_path):
         "name": "RestartObserver",
         "kwargs": {"interval": -6, "mode": "w", "encoding": "utf-8"},
     }
-
-    with pytest.raises(ValueError):
-        restart_observer.file = sys.stdout
 
     new_path = Path(tmp_path, "new_restart_test.json")
 

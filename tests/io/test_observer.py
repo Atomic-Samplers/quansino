@@ -4,6 +4,7 @@ import sys
 from pathlib import Path
 
 import pytest
+from tests.conftest import DummyStream
 
 from quansino.io.core import Observer, TextObserver
 
@@ -42,7 +43,7 @@ def test_observers(tmp_path) -> None:
     TextObserver.accept_stream = False
 
     with pytest.raises(ValueError):
-        text_observer.file = sys.stdout
+        text_observer = TextObserver(file=DummyStream(), interval=1)  # type: ignore
 
     TextObserver.accept_stream = True
 

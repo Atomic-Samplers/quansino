@@ -96,3 +96,11 @@ class DummySimulation:
         self.atoms = atoms
         self.context = context
         self.moves = moves
+
+
+class DummyStream:
+    def read(self, *args, **kwargs):
+        pass
+
+    def write(self, *args, **kwargs):
+        pass
