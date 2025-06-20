@@ -1,10 +1,8 @@
-"""Module for Monte Carlo contexts"""
+"""Module for Monte Carlo contexts."""
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Any
-from warnings import warn
 
 import numpy as np
 from ase.atoms import Atoms
@@ -12,42 +10,58 @@ from ase.atoms import Atoms
 from quansino.utils.atoms import reinsert_atoms
 
 if TYPE_CHECKING:
+    from ase.cell import Cell
     from numpy.random import Generator
 
-    from quansino.mc.core import MoveStorage
-    from quansino.moves.displacements import DisplacementMove
-    from quansino.moves.exchange import ExchangeMove
     from quansino.type_hints import IntegerArray, Positions
 
 
-class Context(ABC):
+class Context:
     """
-    Base abstract class for Monte Carlo contexts. Context defines the interface between the simulation object, the moves and their criteria. The context object aim to provide the necessary information for the move to perform its operation, without having to pass whole objects around. Classes inheriting from [`Context`][quansino.mc.contexts.Context] should define a `save_state()` and `revert_state()` method that saves and reverts the state of the simulation after a move, respectively. Specific context might be required for different types of moves, for example, [`DisplacementContext`][quansino.mc.contexts.DisplacementContext] for displacement moves and [`ExchangeContext`][quansino.mc.contexts.ExchangeContext] for exchange moves. This class is not meant to be instantiated, and represent the bare minimum that a context object should implement.
+    Abstract base class for Monte Carlo contexts. Contexts define the interface between the simulation object, the moves and their criteria. They aim to provide the necessary information for the move to perform its operation, without having to pass whole simulation objects around. Specific context might be required for different types of moves, for example, [`DisplacementContext`][quansino.mc.contexts.DisplacementContext] for displacement moves, [`DeformationContext`][quansino.mc.contexts.DeformationContext] for cell deformation move, and [`ExchangeContext`][quansino.mc.contexts.ExchangeContext] for exchange moves.
 
-    Attributes
+    Parameters
     ----------
     atoms : Atoms
         The atoms object to perform the simulation on.
     rng : Generator
         The random number generator to use.
 
-    Methods
-    -------
-    save_state()
-        Save the current state of the context.
-    revert_state()
-        Revert to the previously saved state.
+    Attributes
+    ----------
+    atoms : Atoms
+        The atoms object which the context operates on.
+    rng : Generator
+        The random number generator in use.
     """
 
+    __slots__ = ("atoms", "last_results", "rng")
+
     def __init__(self, atoms: Atoms, rng: Generator) -> None:
+        """Initialize the `Context` object."""
         self.atoms: Atoms = atoms
         self.rng: Generator = rng
 
-    @abstractmethod
-    def save_state(self, *args, **kwargs) -> None: ...
+    def save_state(self) -> None:
+        """
+        Save the current state of the context. This method can be overridden by subclasses to save specific attributes.
+        """
 
-    @abstractmethod
-    def revert_state(self, *args, **kwargs) -> None: ...
+    def revert_state(self) -> None:
+        """
+        Revert the context to the last saved state. This method can be overridden by subclasses to revert specific attributes.
+        """
+
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert the Context object to a dictionary.
+
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary representation of the context.
+        """
+        return {}
 
 
 class DisplacementContext(Context):
@@ -63,72 +77,114 @@ class DisplacementContext(Context):
 
     Attributes
     ----------
-    atoms : Atoms
-        The atoms object to perform the simulation on. Used in the simulation and moves.
-    rng : Generator
-        The random number generator to use. Used in the criteria and moves.
-    last_positions : Positions
-        The positions of the atoms in the last saved state. Used in the simulation.
-    last_results : dict[str, Any]
-        The results of the ASE calculator in the last saved state. Used in the simulation.
     temperature : float
-        The temperature of the simulation in Kelvin. Used in the criteria.
-    moving_indices : IntegerArray
-        Integer indices of atoms that are being displaced. Used in moves.
-
-    Methods
-    -------
-    save_state()
-        Save the current state of the context, confirming the last positions and results.
-    revert_state()
-        Revert to the previously saved state, discarding the last positions and results.
-    reset()
-        Reset the context by setting `moving_indices` to an empty list.
+        The temperature of the simulation in Kelvin.
+    last_positions : Positions
+        The positions of the atoms in the last saved state.
+    last_energy : float
+        The energy value from the last saved state.
+    _moving_indices : IntegerArray
+        Integer indices of atoms that are being displaced.
     """
 
+    __slots__ = ("_moving_indices", "last_energy", "last_positions", "temperature")
+
     def __init__(self, atoms: Atoms, rng: Generator) -> None:
-        """
-        Initialize the DisplacementContext object.
-
-        Parameters
-        ----------
-        atoms : Atoms
-            The atoms object to perform the simulation on.
-        rng : Generator
-            The random number generator to use.
-        """
+        """Initialize the DisplacementContext object."""
         super().__init__(atoms, rng)
-
-        self.last_positions: Positions = self.atoms.get_positions()
-        self.last_results: dict[str, Any] = {}
 
         self.temperature: float = 0.0
 
+        self.last_positions: Positions = atoms.get_positions()
+        self.last_energy: float = np.nan
+
         self.reset()
-
-    def save_state(self) -> None:
-        """Save the current state of the context and update the last positions and results."""
-        self.last_positions = self.atoms.get_positions()
-        try:
-            self.last_results = self.atoms.calc.results  # type: ignore
-        except AttributeError:
-            warn(
-                "Atoms object does not have calculator results attached.", stacklevel=2
-            )
-            self.last_results = {}
-
-    def revert_state(self) -> None:
-        """Revert to the previously saved state and undo the last move."""
-        self.atoms.positions = self.last_positions
-        try:
-            self.atoms.calc.atoms = self.atoms  # type: ignore
-            self.atoms.calc.results = self.last_results  # type: ignore
-        except AttributeError:
-            warn("Atoms object does not have calculator attached.", stacklevel=2)
 
     def reset(self) -> None:
         """Reset the context by setting `moving_indices` to an empty list."""
-        self.moving_indices: IntegerArray = []
+        self._moving_indices: IntegerArray = []
+
+    def save_state(self) -> None:
+        """Save the current state of the context, including the last positions and energy."""
+        self.last_positions = self.atoms.get_positions()
+        self.last_energy = self.atoms.get_potential_energy()
+
+    def revert_state(self) -> None:
+        """Revert the context to the last saved state, restoring the last positions."""
+        self.atoms.positions = self.last_positions.copy()
+
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert the `DisplacementContext` object to a dictionary.
+
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary representation of the `DisplacementContext` object.
+        """
+        return {
+            "temperature": self.temperature,
+            "last_positions": self.last_positions,
+            "last_energy": self.last_energy,
+        }
+
+
+class DeformationContext(DisplacementContext):
+    """
+    Context for strain moves i.e. moves that change the cell of the simulation.
+
+    Parameters
+    ----------
+    atoms : Atoms
+        The atoms object to perform the simulation on.
+    rng : Generator
+        The random number generator to use.
+
+    Attributes
+    ----------
+    pressure : float
+        The pressure of the system.
+    last_cell : Cell
+        The cell of the atoms in the last saved state.
+    """
+
+    __slots__ = ("last_cell", "pressure")
+
+    def __init__(self, atoms: Atoms, rng: Generator) -> None:
+        """Initialize the `DeformationContext` object."""
+        super().__init__(atoms, rng)
+
+        self.pressure: float = 0.0
+        self.last_cell: Cell = atoms.get_cell()
+
+    def save_state(self) -> None:
+        """
+        Save the current state of the context, including the last cell.
+        """
+        super().save_state()
+        self.last_cell = self.atoms.get_cell()
+
+    def revert_state(self) -> None:
+        """
+        Revert the context to the last saved state, restoring the last cell.
+        """
+        super().revert_state()
+        self.atoms.set_cell(self.last_cell, scale_atoms=False)
+
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert the `DeformationContext` object to a dictionary.
+
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary representation of the `DeformationContext` object.
+        """
+        return {
+            **super().to_dict(),
+            "pressure": self.pressure,
+            "last_cell": self.last_cell,
+        }
 
 
 class ExchangeContext(DisplacementContext):
@@ -141,132 +197,101 @@ class ExchangeContext(DisplacementContext):
         The atoms object to perform the simulation on.
     rng : Generator
         The random number generator to use.
-    moves : dict[str, MoveStorage[DisplacementMove | ExchangeMove, ExchangeContext]]
-        Dictionary of displacement moves to update labels when atoms are added or removed.
 
     Attributes
     ----------
-    atoms : Atoms
-        The atoms object to perform the simulation on. Used in the simulation and moves.
-    rng : Generator
-        The random number generator to use. Used in the criteria and moves.
-    moves : dict[str, MoveStorage]
-        Dictionary of displacement moves to update when atoms are added or removed. Used only in the context.
+    _added_indices : IntegerArray
+        Integer indices of atoms that were added in the last move.
+    _added_atoms : Atoms
+        Atoms that were added in the last move.
+    _deleted_indices : IntegerArray
+        Integer indices of atoms that were deleted in the last move.
+    _deleted_atoms : Atoms
+        Atoms that were deleted in the last move.
+    accessible_volume : float
+        The accessible volume of the system.
     chemical_potential : float
-        The chemical potential of the system. Used in the criteria.
-    number_of_particles : int
-        The number of particles in the system. Used in the criteria.
-    added_indices : IntegerArray
-        Integer indices of atoms that were added in the last move. Used in the moves.
-    added_atoms : Atoms
-        Atoms that were added in the last move. Used in the criteria and moves.
-    deleted_indices : IntegerArray
-        Integer indices of atoms that were deleted in the last move. Used in the moves.
-    deleted_atoms : Atoms
-        Atoms that were deleted in the last move. Used in the criteria and moves.
-    accessible_volume : float [Criteria]
-        The accessible volume of the system. Used in the criteria.
+        The chemical potential of the system.
+    exchange_atoms : Atoms
+        Atoms that can be exchanged in the simulation.
+    number_of_exchange_particles : int
+        The number of particles that can be exchanged.
     particle_delta : int
-        The change in the number of particles in the system. Used in the criteria and moves.
-
-    Methods
-    -------
-    save_state()
-        Save the current state of the context and update move labels.
-    revert_state()
-        Revert to the previously saved state and undo the last move.
-    reset()
-        Reset the context by setting all attributes to their initial values.
+        The change in the number of particles in the last move, positive for addition and negative for deletion.
     """
 
-    def __init__(
-        self,
-        atoms: Atoms,
-        rng: Generator,
-        moves: dict[str, MoveStorage[DisplacementMove | ExchangeMove, ExchangeContext]],
-    ) -> None:
-        """
-        Initialize the ExchangeContext object.
+    __slots__ = (
+        "_added_atoms",
+        "_added_indices",
+        "_deleted_atoms",
+        "_deleted_indices",
+        "accessible_volume",
+        "chemical_potential",
+        "exchange_atoms",
+        "number_of_exchange_particles",
+        "particle_delta",
+    )
 
-        Parameters
-        ----------
-        atoms : Atoms
-            The atoms object to perform the simulation on.
-        rng : Generator
-            The random number generator to use.
-        moves : dict[str, MoveStorage]
-            Dictionary of displacement moves to update labels when atoms are added or removed.
-        """
+    def __init__(self, atoms: Atoms, rng: Generator) -> None:
+        """Initialize the `ExchangeContext` object."""
         super().__init__(atoms, rng)
 
-        self.moves: dict[
-            str, MoveStorage[DisplacementMove | ExchangeMove, ExchangeContext]
-        ] = moves
+        self.chemical_potential = np.nan
 
-        self.chemical_potential: float = 0.0
-        self.number_of_particles: int = 0
+        self.exchange_atoms: Atoms = Atoms()
+        self.number_of_exchange_particles = 0
 
-        self.accessible_volume: float = self.atoms.cell.volume
+        self.accessible_volume = self.atoms.cell.volume
 
+        self.reset()
+
+    def reset(self) -> None:
+        """
+        Reset the context by setting all attributes to their default values.
+        """
+        self._added_indices: IntegerArray = []
+        self._added_atoms: Atoms = Atoms()
+        self._deleted_indices: IntegerArray = []
+        self._deleted_atoms: Atoms = Atoms()
+
+        self.particle_delta = 0
+
+    def revert_state(self) -> None:
+        """
+        Revert the context to the last saved state.
+        """
+        if len(self._added_indices) != 0:
+            del self.atoms[self._added_indices]
+        if len(self._deleted_indices) != 0:
+            if len(self._deleted_atoms) == 0:
+                raise ValueError("Last deleted atoms was not saved.")
+
+            reinsert_atoms(self.atoms, self._deleted_atoms, self._deleted_indices)
+
+        super().revert_state()
         self.reset()
 
     def save_state(self) -> None:
         """
-        Save the current state of the context and update move labels.
-
-        Raises
-        ------
-        ValueError
-            If the labels are not updated correctly.
+        Save the current state of the context, including the number of exchange particles.
         """
-        if len(self.added_indices):
-            for move_storage in self.moves.values():
-                move = move_storage.move
-                label: int = move.default_label or (
-                    max(move.unique_labels) + 1 if len(move.unique_labels) else 0
-                )
-                move.set_labels(
-                    np.hstack((move.labels, np.full(len(self.added_indices), label)))
-                )
-
-                if len(move.labels) != len(self.atoms):
-                    raise ValueError("Labels not updated correctly.")
-        elif len(self.deleted_indices):
-            for move_storage in self.moves.values():
-                move = move_storage.move
-                move.set_labels(np.delete(move.labels, self.deleted_indices))
-
-                if len(move.labels) != len(self.atoms):
-                    raise ValueError("Labels not updated correctly.")
-
-        self.number_of_particles += self.particle_delta
-
         super().save_state()
+        self.number_of_exchange_particles += self.particle_delta
+        self.reset()
 
-    def revert_state(self) -> None:
+    def to_dict(self) -> dict[str, Any]:
         """
-        Revert the last move made by the context.
+        Convert the `ExchangeContext` object to a dictionary.
 
-        Raises
-        ------
-        ValueError
-            If the last deleted atoms are not saved.
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary representation of the `ExchangeContext` object.
         """
-        if len(self.added_indices) != 0:
-            del self.atoms[self.added_indices]
-        if len(self.deleted_indices) != 0:
-            if len(self.deleted_atoms) == 0:
-                raise ValueError("Last deleted atoms not saved.")
-
-            reinsert_atoms(self.atoms, self.deleted_atoms, self.deleted_indices)
-
-        super().revert_state()
-
-    def reset(self) -> None:
-        """Reset the context by setting all attributes to their default values"""
-        self.added_indices: IntegerArray = []
-        self.added_atoms: Atoms = Atoms()
-        self.deleted_indices: IntegerArray = []
-        self.deleted_atoms: Atoms = Atoms()
-
-        self.particle_delta: int = 0
+        return {
+            **super().to_dict(),
+            "chemical_potential": self.chemical_potential,
+            "number_of_exchange_particles": self.number_of_exchange_particles,
+            "accessible_volume": self.accessible_volume,
+            "exchange_atoms": self.exchange_atoms,
+        }

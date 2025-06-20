@@ -12,16 +12,19 @@ if TYPE_CHECKING:
     from ase.atoms import Atoms
     from ase.constraints import FixConstraint
 
-    from quansino.type_hints import IntegerArray
+    from quansino.type_hints import AdjacencyMatrix, IntegerArray
 
 
 def has_constraint(atoms: Atoms, constraint_type: type[FixConstraint] | str) -> bool:
-    """Check if the Atoms object has constraints.
+    """
+    Check if the Atoms object has the specified constraint.
 
     Parameters
     ----------
-    atoms
+    atoms : Atoms
         The Atoms object to check.
+    constraint_type : type[FixConstraint] | str
+        The constraint type to check.
 
     Returns
     -------
@@ -39,23 +42,30 @@ def search_molecules(
     cutoff: float | list[float] | tuple[float] | dict[tuple[str, str], float],
     required_size: int | tuple | None = None,
     default_array: IntegerArray | None = None,
-):
-    """Search for molecules in the Atoms object.
+) -> AdjacencyMatrix:
+    """
+    Search for molecules in the Atoms object.
 
     Parameters
     ----------
-    atoms
+    atoms : Atoms
         The Atoms object to search.
-    cutoff
+    cutoff : float | list[float] | tuple[float] | dict[tuple[str, str], float]
         The cutoff distance to use for the search. Can be a single float, a list or tuple of floats
         with the same length as the number of atom types, or a dictionary with the atom types as keys
         and the cutoff distances as values.
+    required_size : int | tuple | None, optional
+        The required size of molecules to include. If int, only molecules of that exact size are included.
+        If tuple, molecules with sizes between the two values (inclusive) are included.
+        If None, all molecules are included (equivalent to (0, len(atoms))).
+    default_array : IntegerArray | None, optional
+        Default array to use for molecule assignment. If None, creates an array filled with -1.
 
     Returns
     -------
-    list[list[int]]
-        A list of lists of atom indices, where each list contains the indices of the atoms in a
-        molecule.
+    IntegerArray
+        An array of molecule indices for each atom, where atoms belonging to the same molecule
+        have the same index. Atoms not belonging to any qualifying molecule have index -1.
     """
     indices, neighbors = neighbor_list(
         "ij", atoms, cutoff=cutoff, self_interaction=False
@@ -80,20 +90,21 @@ def search_molecules(
 
 
 def reinsert_atoms(atoms: Atoms, new_atoms: Atoms, indices: IntegerArray) -> None:
-    """Reinsert atoms into an Atoms object, in place. This differs from pure insertion in that it assumes that `new_atoms` were previously removed from `atoms` at their old `indices`.
+    """
+    Reinsert atoms into an Atoms object, in place. This differs from pure insertion in that it assumes that `new_atoms` were previously removed from `atoms` at their old `indices`.
 
     Parameters
     ----------
-    atoms
+    atoms : Atoms
         The Atoms object to insert atoms into.
-    new_atoms
+    new_atoms : Atoms
         The Atoms object with the atoms to insert.
-    indices
+    indices : IntegerArray
         The indices that `new_atoms` were previously removed from.
 
     Returns
     -------
-    Atoms
+    None
         The Atoms object with the reinserted atoms.
     """
     len_atoms = len(atoms)
