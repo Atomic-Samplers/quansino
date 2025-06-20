@@ -107,3 +107,31 @@ def test_isobaric(bulk_small, rng, tmp_path):
 
     assert_array_equal(acceptances, acceptance_from_log[1:])
     assert_allclose(np.sum(acceptances), 50, atol=20)
+
+
+def test_isobaric_simulation(bulk_small, rng):
+    """Test the `Isobaric` class with a simulation."""
+    mc = Isobaric(
+        bulk_small,
+        temperature=300.0,
+        pressure=1.0 * bar,
+        max_cycles=10,
+        default_displacement_move=None,
+        default_cell_move=CellMove(IsotropicDeformation(0.05)),
+    )
+
+    last_cell = mc.atoms.cell.copy()
+
+    for step in mc.irun(10):
+        for move_name in step:
+            assert_allclose(mc.context.last_cell, mc.atoms.cell)
+            assert_allclose(mc.context.last_positions, mc.atoms.get_positions())
+            assert mc.moves[move_name].probability == 0.2
+
+        any_accepted = any(history[1] for history in mc.move_history)
+
+        if any_accepted:
+            assert not np.allclose(mc.atoms.cell, last_cell)
+            last_cell = mc.atoms.cell.copy()
+        else:
+            assert_allclose(mc.atoms.cell, last_cell)

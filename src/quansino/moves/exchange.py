@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
-from ase.atoms import Atoms
 
 from quansino.mc.contexts import ExchangeContext
 from quansino.moves.composite import CompositeMove
@@ -14,6 +13,8 @@ from quansino.operations.displacement import Translation
 from quansino.protocols import Operation
 
 if TYPE_CHECKING:
+    from ase.atoms import Atoms
+
     from quansino.type_hints import IntegerArray
 
 
@@ -79,7 +80,7 @@ class ExchangeMove[OperationType: Operation, ContextType: ExchangeContext](
 
         self.composite_move_type = CompositeExchangeMove
 
-    def attempt_addition(self, context: ContextType) -> tuple[IntegerArray, Atoms]:
+    def attempt_addition(self, context: ContextType) -> IntegerArray:
         """
         Attempt to add atoms to the simulation. If `to_add_atoms` is not set, it will use the `exchange_atoms` from the context.
 
@@ -87,10 +88,6 @@ class ExchangeMove[OperationType: Operation, ContextType: ExchangeContext](
         -------
         IntegerArray
             The indices of the added atoms.
-
-        Developer Notes
-        ---------------
-        This class should be changed to return the indices of the added atoms, so that the context can update its state accordingly.
         """
         self.to_add_atoms = self.to_add_atoms or context.exchange_atoms
 
@@ -101,11 +98,11 @@ class ExchangeMove[OperationType: Operation, ContextType: ExchangeContext](
 
         if not super().attempt_displacement(context):
             del context.atoms[context._moving_indices]
-            return [], Atoms()
+            return []
 
-        return context._moving_indices, self.to_add_atoms
+        return context._moving_indices
 
-    def attempt_deletion(self, context: ContextType) -> tuple[IntegerArray, Atoms]:
+    def attempt_deletion(self, context: ContextType) -> IntegerArray:
         """
         Attempt to delete atoms from the simulation. If `to_delete_label` is not set, it will randomly select a label from the unique labels of the context.
 
@@ -113,26 +110,19 @@ class ExchangeMove[OperationType: Operation, ContextType: ExchangeContext](
         -------
         IntegerArray
             The indices of the deleted atoms.
-
-        Developer Notes
-        ---------------
-        This class should be changed to return the indices of the deleted atoms, so that the context can update its state accordingly.
         """
         if self.to_delete_label is None:
             if not len(self.unique_labels):
-                return [], Atoms()
+                return []
 
             self.to_delete_label = int(context.rng.choice(self.unique_labels))
 
         (indices,) = np.where(self.labels == self.to_delete_label)
 
         if not len(indices):
-            return [], Atoms()
+            return []
 
-        deleted_atoms = context.atoms[indices]
-        del context.atoms[indices]
-
-        return indices, cast("Atoms", deleted_atoms)
+        return indices
 
     def __call__(self, context: ContextType) -> bool:
         """
@@ -153,9 +143,9 @@ class ExchangeMove[OperationType: Operation, ContextType: ExchangeContext](
             is_addition = bool(self.to_add_atoms)
 
         if is_addition:
-            indices, added_atoms = self.attempt_addition(context)
+            indices = self.attempt_addition(context)
 
-            if len(indices) and len(added_atoms):
+            if len(indices):
                 context._added_indices = np.hstack(
                     (context._added_indices, indices), dtype=np.int_, casting="unsafe"
                 )
@@ -164,15 +154,16 @@ class ExchangeMove[OperationType: Operation, ContextType: ExchangeContext](
 
                 return self.register_success()
         else:
-            indices, deleted_atoms = self.attempt_deletion(context)
+            indices = self.attempt_deletion(context)
 
-            if len(indices) and len(deleted_atoms):
+            if len(indices):
                 context._deleted_indices = np.hstack(
                     (context._deleted_indices, indices), dtype=np.int_, casting="unsafe"
                 )
-                context._deleted_atoms += deleted_atoms
+                context._deleted_atoms += context.atoms[indices]
                 context.particle_delta -= 1
 
+                del context.atoms[indices]
                 return self.register_success()
 
         return self.register_failure()
@@ -264,56 +255,53 @@ class CompositeExchangeMove(CompositeMove[ExchangeMove]):
         bool
             Whether any of the exchange moves in the composite were valid.
         """
-        any_success = False
-
         is_addition = context.rng.random() < self.bias_towards_insert
 
         if is_addition:
-            for move in self.moves:
-                indices, added_atoms = move.attempt_addition(context)
+            success = False
 
-                if len(indices) and len(added_atoms):
+            for move in self.moves:
+                indices = move.attempt_addition(context)
+
+                if len(indices):
                     context._added_indices = np.hstack(
                         (context._added_indices, indices),
                         dtype=np.int_,
                         casting="unsafe",
                     )
-                    context._added_atoms += added_atoms
+                    context._added_atoms += context.atoms[indices]
                     context.particle_delta += 1
+                    success = True
 
-                    move.register_success()
-                    any_success = True
-                else:
-                    move.register_failure()
+                move.to_add_atoms = None
+            return success
         else:
-            self.deleted_labels: list[int] = []
+            deleted_labels = []
+            deleted_indices = np.array([], dtype=np.int_)
 
             for move in self.moves:
                 available_candidates = np.setdiff1d(
-                    move.unique_labels, self.deleted_labels, assume_unique=True
+                    move.unique_labels, deleted_labels, assume_unique=True
                 )
                 if len(available_candidates) == 0:
                     continue
 
                 to_delete_label = context.rng.choice(available_candidates)
-                move.to_delete_label = to_delete_label
 
-                indices, deleted_atoms = move.attempt_deletion(context)
+                (indices,) = np.where(move.labels == to_delete_label)
 
-                if len(indices) and len(deleted_atoms):
-                    context._deleted_indices = np.hstack(
-                        (context._deleted_indices, indices),
-                        dtype=np.int_,
-                        casting="unsafe",
-                    )
-                    context._deleted_atoms += deleted_atoms
-                    context.particle_delta -= 1
+                deleted_indices = np.hstack(
+                    (deleted_indices, indices), dtype=np.int_, casting="unsafe"
+                )
+                deleted_labels.append(to_delete_label)
 
-                    move.register_success()
-                    any_success = True
+            if len(deleted_indices) == 0:
+                return False
 
-                    self.deleted_labels.append(to_delete_label)
-                else:
-                    move.register_failure()
+            context._deleted_indices = deleted_indices
+            context._deleted_atoms += context.atoms[deleted_indices]
+            context.particle_delta -= len(np.unique(deleted_labels))
 
-        return any_success
+            del context.atoms[deleted_indices]
+
+            return True

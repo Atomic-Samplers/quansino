@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
+from ase.atoms import Atoms
+from ase.build import molecule
 from numpy.testing import assert_allclose
 from tests.conftest import DummyOperation
 
-from quansino.mc.contexts import Context, DisplacementContext
+from quansino.mc.contexts import Context, DisplacementContext, ExchangeContext
 from quansino.moves.composite import CompositeMove
 from quansino.moves.core import BaseMove
 from quansino.moves.displacement import CompositeDisplacementMove, DisplacementMove
@@ -257,3 +259,101 @@ def test_composite_displacement_move(bulk_medium, rng):
 
     with pytest.raises(ValueError):
         composite_move * -1  # type: ignore
+
+
+def test_composite_exchange_move(empty_atoms, rng):
+    """Test the `CompositeExchangeMove` class."""
+    empty_atoms.set_cell(np.eye(3) * 10.0)
+
+    context = ExchangeContext(empty_atoms, rng)
+    context.exchange_atoms = Atoms("H")
+
+    move_1 = ExchangeMove([])
+    move_2 = ExchangeMove([])
+
+    composite_move = move_1 + move_2
+
+    assert isinstance(composite_move, CompositeExchangeMove)
+    assert len(composite_move) == 2
+
+    composite_move.bias_towards_insert = 1.0
+
+    composite_move(context)
+
+    assert len(context.atoms) == 2
+
+    assert not np.allclose(context.atoms[0].position, context.atoms[1].position)
+
+    for i in range(50):
+        composite_move(context)
+        assert len(context.atoms) == 2 + 2 * (i + 1)
+
+    composite_move = composite_move * 2
+
+    assert isinstance(composite_move, CompositeExchangeMove)
+    assert len(composite_move) == 4
+
+    for move in composite_move:
+        assert isinstance(move, ExchangeMove)
+
+        move.set_labels(np.arange(len(empty_atoms)))
+
+    composite_move.bias_towards_insert = 0.0
+
+    composite_move(context)
+
+    assert len(context.atoms) == 98
+
+    for i in range(20):
+        for move in composite_move:
+            move.set_labels(np.arange(len(empty_atoms)))
+
+        composite_move(context)
+
+        assert len(context.atoms) == 98 - 4 * (i + 1)
+
+    context.exchange_atoms = molecule("H2O")
+
+    composite_move.bias_towards_insert = 1.0
+
+    composite_move(context)
+
+    assert len(context.atoms) == 18 + 4 * len(context.exchange_atoms)
+
+    for i in range(50):
+        composite_move(context)
+
+        assert len(context.atoms) == 30 + 4 * (i + 1) * len(context.exchange_atoms)
+
+    labels = np.full(len(empty_atoms), -1, dtype=int)
+    labels[18:] = np.repeat(np.arange(51 * 4), 3)
+
+    for move in composite_move:
+        move.set_labels(labels)
+
+    composite_move.bias_towards_insert = 0.0
+
+    composite_move(context)
+
+    assert len(context.atoms) == 630 - 4 * len(context.exchange_atoms)
+
+    for i in range(50):
+        for move in composite_move:
+            labels = np.full(len(empty_atoms), -1, dtype=int)
+            labels[18:] = np.repeat(np.arange(50 * 4 - i * 4), 3)
+            move.set_labels(labels)
+
+        composite_move(context)
+
+        assert len(context.atoms) == 618 - 4 * (i + 1) * len(context.exchange_atoms)
+        assert context._deleted_indices is not None
+        assert context._deleted_atoms is not None
+
+    for move in composite_move:
+        move.set_labels(np.full(len(empty_atoms), -1, dtype=int))
+
+    atoms_count = len(context.atoms)
+
+    for _ in range(50):
+        composite_move(context)
+        assert len(context.atoms) == atoms_count
