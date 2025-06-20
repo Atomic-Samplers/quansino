@@ -13,13 +13,16 @@ from quansino.io import Logger
 
 
 def test_logger():
+    """Test the `Logger` class."""
     string_io = StringIO()
 
-    logger = Logger(string_io)
+    logger = Logger(string_io, interval=1)
     logger.add_field("Class", lambda: "GrandCanonicalMC", str_format="{:<24s}")
     logger.add_field("Epot[eV]", lambda: 123141.0)
     logger.add_field("Step", lambda: 1, str_format="{:>12d}")
     logger.write_header()
+
+    assert not hasattr(logger, "__dict__")
 
     logger()
 
@@ -33,12 +36,17 @@ def test_logger():
 
     assert "Epot[eV]" not in logger.fields
 
+    logger.close()
+
+    assert string_io.closed
+
 
 def test_opt_custom_logger(bulk_small):
-    bulk_small.rattle(0.1)
+    """Test the `Logger` class with custom fields."""
+    bulk_small.rattle(0.01)
 
     string_io = StringIO()
-    logger = Logger(string_io)
+    logger = Logger(string_io, interval=1)
     opt = BFGS(bulk_small, logfile=None)
 
     def negative_omega():
@@ -51,6 +59,23 @@ def test_opt_custom_logger(bulk_small):
     logger.add_field("NegativeEigenvalues", negative_omega, str_format="{:>22s}")
     opt.attach(logger)
 
+    logger.remove_fields("Time")
+
+    logger.add_field(
+        "Symbols",
+        bulk_small.get_chemical_symbols,
+        str_format="{:>4s}" * len(bulk_small),
+        header_format=f"{{:>{4 * len(bulk_small)}s}}",
+        is_array=True,
+    )
+
+    logger.add_field(
+        tuple(f"Symbol[{i}]" for i in range(len(bulk_small))),
+        bulk_small.get_chemical_symbols,
+        str_format="{:>12s}" * len(bulk_small),
+        is_array=True,
+    )
+
     logger.write_header()
 
     opt.run(fmax=0.01)
@@ -59,14 +84,25 @@ def test_opt_custom_logger(bulk_small):
 
     assert "NegativeEigenvalues" in text
     assert "False" in text
-    assert "Optimizer" in text
+    assert "Class" in text
+
+    assert (
+        text.strip()
+        == """Class                    Step     Epot[eV]   Fmax[eV/A]    NegativeEigenvalues          Symbols    Symbol[0]   Symbol[1]   Symbol[2]   Symbol[3]
+BFGS                        0     -14.1584       0.1053                    N/A   Cu  Cu  Cu  Cu           Cu          Cu          Cu          Cu
+BFGS                        1     -14.1587       0.0867                  False   Cu  Cu  Cu  Cu           Cu          Cu          Cu          Cu
+BFGS                        2     -14.1595       0.0299                  False   Cu  Cu  Cu  Cu           Cu          Cu          Cu          Cu
+BFGS                        3     -14.1595       0.0265                  False   Cu  Cu  Cu  Cu           Cu          Cu          Cu          Cu
+BFGS                        4     -14.1596       0.0022                  False   Cu  Cu  Cu  Cu           Cu          Cu          Cu          Cu"""
+    )
 
     string_io.close()
 
 
-def test_md_logger(bulk_small):
+def test_ase_md_logger(bulk_small):
+    """Test the `Logger` class with ASE MD simulation."""
     string_io = StringIO()
-    logger = Logger(string_io)
+    logger = Logger(string_io, interval=1)
 
     MaxwellBoltzmannDistribution(bulk_small, temperature_K=300)
     dyn = VelocityVerlet(bulk_small, 1.0 * fs)
@@ -82,19 +118,20 @@ def test_md_logger(bulk_small):
 
     assert (
         header
-        == "Time[ps]" + " " * 9 + "Epot[eV]" + " " * 5 + "Ekin[eV]" + " " * 9 + "T[K]"
+        == "Time[ps]" + " " * 9 + "Epot[eV]" + " " * 5 + "Ekin[eV]" + " " * 7 + "T[K]"
     )
 
     string_io.close()
 
 
-def test_opt_stress_logger(bulk_small):
+def test_stress_logger(bulk_small):
+    """Test the `Logger` class with stress fields."""
     bulk_small.rattle(0.1)
 
-    bulk_small.calc = EMT()  # switch to EMT for stress calculation
+    bulk_small.calc = EMT()  # Stress
 
     string_io = StringIO()
-    logger = Logger(string_io)
+    logger = Logger(string_io, interval=1)
 
     MaxwellBoltzmannDistribution(bulk_small, temperature_K=300)
     dyn = VelocityVerlet(bulk_small, 1.0 * fs)
@@ -138,3 +175,5 @@ def test_opt_stress_logger(bulk_small):
     assert "Stress[xy][GPa]" in new_logger_lines
 
     string_io.close()
+
+    assert string_io.closed
