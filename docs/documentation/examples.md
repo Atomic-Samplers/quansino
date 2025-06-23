@@ -195,7 +195,7 @@ Instead, we want to attempt moves only close to the nanoparticle where the atoms
 ...
 
 
-def check_move() -> bool:
+def check_move(context: ExchangeContext) -> bool:
     """
     Check if the move can be performed based on the center of mass distance.
 

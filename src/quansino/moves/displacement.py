@@ -161,8 +161,8 @@ class DisplacementMove[OperationType: Operation, ContextType: DisplacementContex
         new_labels : IntegerArray
             The new labels of the atoms to displace.
         """
-        self.labels: IntegerArray = np.asarray(new_labels)  # type: ignore
-        self.unique_labels: IntegerArray = np.unique(self.labels[self.labels >= 0])  # type: ignore
+        self.labels: IntegerArray = np.asarray(new_labels)
+        self.unique_labels: IntegerArray = np.unique(self.labels[self.labels >= 0])
 
     def register_success(self) -> Literal[True]:
         """
