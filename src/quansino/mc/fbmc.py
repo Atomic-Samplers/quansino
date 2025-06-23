@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from ase.atoms import Atoms
     from numpy.typing import NDArray
 
-    from quansino.type_hints import Displacements, Forces, Masses, ShapedMasses
+    from quansino.type_hints import Displacements, Forces, ShapedMasses
 
 
 class ForceBias(Driver):
@@ -73,12 +73,10 @@ class ForceBias(Driver):
         self.__seed: Final = seed or PCG64().random_raw()
         self._rng = RNG(PCG64(self.__seed))
 
-        self.size = (len(atoms), 3)
+        super().__init__(atoms, **driver_kwargs)
 
         self.update_masses(atoms.get_masses())
-        self.set_masses_scaling_power(np.full((len(atoms), 3), 0.25))
-
-        super().__init__(atoms, **driver_kwargs)
+        self.masses_scaling_power = 0.25
 
         if not has_constraint(self.atoms, "FixCom"):
             warn(
@@ -90,13 +88,12 @@ class ForceBias(Driver):
         self.gamma = 0.0
 
         if self.default_logger:
+            self.default_logger.add_mc_fields(self)
             self.default_logger.add_field(
                 "Gamma/GammaMax",
                 lambda: np.max(np.abs(self.gamma / self.gamma_max_value)),
                 str_format="{:>16.2f}",
             )
-
-        self.current_size = self.size
 
     def calculate_gamma(self, forces: Forces) -> None:
         """
@@ -139,7 +136,20 @@ class ForceBias(Driver):
 
         return dictionary
 
-    def set_masses_scaling_power(
+    @property
+    def masses_scaling_power(self) -> ShapedMasses | float:
+        """
+        Get the power to which the mass ratio is raised to scale the displacement.
+
+        Returns
+        -------
+        ShapedMasses | float
+            The power value(s) for each atom and direction.
+        """
+        return self._masses_scaling_power
+
+    @masses_scaling_power.setter
+    def masses_scaling_power(
         self, value: dict[str, float] | ShapedMasses | float
     ) -> None:
         """
@@ -148,37 +158,35 @@ class ForceBias(Driver):
         Parameters
         ----------
         value : dict[str, float] | ShapedMasses | float
-            The power value(s). If a dict, keys are element symbols and values are the powers. If ShapedMasses, it must have shape (n_atoms, 3). If a float, the same value is used for all atoms.
+            The power value(s). If a dict, keys are element symbols and values are the powers. If ShapedMasses, it must have shape (len(atoms), 3). If a float, the same value is used for all atoms.
 
         Raises
         ------
         ValueError
             If the value has an invalid type or if an NDArray with incorrect shape is provided.
         """
+        size = (len(self.atoms), 3)
+
         if isinstance(value, dict):
-            self.masses_scaling_power = np.full(self.size, 0.25)
+            self._masses_scaling_power = np.full(size, 0.25)
 
             for el in np.unique(self.atoms.symbols):
                 indices = self.atoms.symbols == el
-                self.masses_scaling_power[indices, :] = value.get(el, 0.25)
+                self._masses_scaling_power[indices, :] = value.get(el, 0.25)
 
         elif isinstance(value, float | np.floating):
-            self.masses_scaling_power = np.full(self.size, value)
+            self._masses_scaling_power = value
         elif isinstance(value, np.ndarray):
-            if value.shape != self.size:
+            if value.shape != size:
                 raise ValueError(
-                    f"Invalid shape for masses_scaling_power. Expected {self.size}, got {value.shape}."
+                    f"Invalid shape for masses_scaling_power. Expected {size}, got {value.shape}."
                 )
 
-            self.masses_scaling_power = value
+            self._masses_scaling_power = value
         else:
             raise ValueError("Invalid value type for masses_scaling_power.")
 
-        self.mass_scaling = np.power(
-            np.min(self.shaped_masses) / self.shaped_masses, self.masses_scaling_power
-        )
-
-    def update_masses(self, masses: ShapedMasses | Masses | None = None) -> None:
+    def update_masses(self, masses: ShapedMasses | None = None) -> None:
         """
         Update the masses used for displacement scaling.
 
@@ -191,7 +199,7 @@ class ForceBias(Driver):
             masses = self.atoms.get_masses()
 
         if masses.ndim == 1:
-            masses = np.broadcast_to(masses[:, np.newaxis], self.size)
+            masses = np.broadcast_to(masses[:, np.newaxis], (len(self.atoms), 3))
 
         self.shaped_masses = masses
 
@@ -224,7 +232,14 @@ class ForceBias(Driver):
 
             converged = self.calculate_trial_probability() > probability_random
 
-        displacement = self.zeta * self.delta * self.mass_scaling
+        displacement = (
+            self.zeta
+            * self.delta
+            * np.power(
+                np.min(self.shaped_masses) / self.shaped_masses,
+                self.masses_scaling_power,
+            )
+        )
 
         self.atoms.set_momenta(self.shaped_masses * displacement)
         corrected_displacement = self.atoms.get_momenta() / self.shaped_masses

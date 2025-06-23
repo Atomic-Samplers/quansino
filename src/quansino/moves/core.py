@@ -42,7 +42,7 @@ class BaseMove[OperationType: Operation, ContextType: Context]:
         Whether to apply constraints to the move.
     context : ContextType
         The simulation context attached to this move.
-    check_move : Callable[[], bool]
+    check_move : Callable[..., bool]
         A callable that returns True if the move should proceed, False otherwise.
     composite_move_type : type[CompositeMove]
         The type of composite move that this move can be combined into.
@@ -74,7 +74,7 @@ class BaseMove[OperationType: Operation, ContextType: Context]:
 
         self.max_attempts = 10000
 
-        self.check_move: Callable[[], bool] = lambda: True
+        self.check_move: Callable[..., bool] = lambda *_args, **_kwargs: True
 
     def __call__(self, context: ContextType) -> bool:
         """

@@ -127,7 +127,7 @@ def test_displacement_move_3(bulk_small, rng):
 
     assert_array_less(np.abs(bulk_small.positions[0] - old_positions[0]), 0.1)
 
-    def check_move() -> bool:
+    def check_move(*args, **kwargs) -> bool:
         return move.apply_constraints
 
     move.check_move = check_move

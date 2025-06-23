@@ -56,7 +56,7 @@ def test_observers(tmp_path):
     }
 
 
-def test_text_observer_repr() -> None:
+def test_text_observer_repr(tmp_path) -> None:
     """Test the `__repr__` method of the `TextObserver` class."""
     observer = TextObserver(DummyStream(), interval=1)  # type: ignore
     assert (
@@ -64,8 +64,8 @@ def test_text_observer_repr() -> None:
         == "TextObserver(Class:DummyStream, mode=a, encoding=utf-8, interval=1)"
     )
 
-    text_observer = TextObserver(file=Path("weird_file.wrd"), interval=1)
+    text_observer = TextObserver(file=Path(tmp_path / "weird_file.wrd"), interval=1)
     assert (
         repr(text_observer)
-        == "TextObserver(Path:weird_file.wrd, mode=a, encoding=utf-8, interval=1)"
+        == f"TextObserver(Path:{tmp_path}/weird_file.wrd, mode=a, encoding=utf-8, interval=1)"
     )

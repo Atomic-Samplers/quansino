@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from sys import stdout
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from ase.atoms import Atoms
@@ -16,6 +16,9 @@ from quansino.mc.criteria import GrandCanonicalCriteria
 from quansino.mc.gcmc import GrandCanonical
 from quansino.moves.displacement import DisplacementMove
 from quansino.moves.exchange import ExchangeMove
+
+if TYPE_CHECKING:
+    from quansino.mc.contexts import DisplacementContext
 
 atoms = Octahedron("Pt", 4)
 atoms.center(10)
@@ -61,7 +64,7 @@ mc.moves["default_displacement_move"].probability = 0.9
 mc.run(100)
 
 
-def check_move() -> bool:
+def check_move(context: DisplacementContext) -> bool:
     """
     Check if the move can be performed based on the center of mass distance.
 
@@ -70,7 +73,7 @@ def check_move() -> bool:
     bool
         True if the move can be performed, False otherwise.
     """
-    atoms_about_to_be_placed = atoms[mc.context._moving_indices]
+    atoms_about_to_be_placed = atoms[context._moving_indices]
     com_distance = (
         atoms_about_to_be_placed.positions  # type: ignore[shape]
         - atoms[atoms.symbols == "Pt"].get_center_of_mass()  # type: ignore[shape]

@@ -16,13 +16,23 @@
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![pre-commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)](https://github.com/pre-commit/pre-commit)
 
-`quansino` is a modern simulation framework based on the Atomic Simulation Environment (ASE) designed for both material science and molecular systems. It combines the reliability of established Monte Carlo and general sampling methods with an intuitive, and flexible Python interface.
+`quansino` is a Python framework for running Monte Carlo simulations on atomic systems, designed to be modular and work with popular quantum chemistry codes/forcefields. The package offer a flexible interface to build custom algorithms, and is designed to be modular and extensible. It is built to work with the [Atomic Simulation Environment (ASE)](https://wiki.fysik.dtu.dk/ase/) `Atoms` object.
 
 ## Key Features 🎰
 
-- Perform (grand) canonical, isobaric, and other ensemble simulations. The framework allows designing custom ensembles and custom parametrization for subsystems or degrees of freedom.
-- Include algorithm for efficient sampling of complex energy landscapes, such as basin-hopping, and force-biased Monte Carlo.
-- Being based on ASE, `quansino` supports a wide range of DFT codes and force fields.
+- Perform simulations in various ensemble; (grand-canonical) canonical, isobaric, more will be added in the future.
+- The framework allows to design custom simulation algorithms by providing explicit interfaces for each step of the simulation, such as:
+
+  - **Moves**: Moves are the core of the simulation, allowing for the modification of atomic configurations. The framework supports a wide range of move types, including:
+
+    - **Displacement Moves**: Moves that displace atoms in the simulation box.
+    - **Cell Moves**: Moves that change the simulation box size or shape.
+    - **Exchange Moves**: Moves that add/remove atoms from the simulation box.
+
+  - **Contexts**: Hold the state of the simulation, such as temperature, pressure, and chemical potential.
+  - **Criteria**: Criteria objects are used to determine the acceptance of moves based on energy changes.
+
+- The code makes use of Python's type hints and duck typing to ensure that the code is modular and extensible. Along with an extensive documentation, this makes it easy to understand and extend the codebase.
 
 ## Documentation 🎱
 

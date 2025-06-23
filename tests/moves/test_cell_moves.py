@@ -33,7 +33,7 @@ def test_cell_move(bulk_small, rng):
     assert_allclose(context.atoms.positions, old_positions)
 
     move.scale_atoms = True
-    move.check_move = lambda: False
+    move.check_move = lambda *args, **kwargs: False
 
     old_cell = context.atoms.cell.copy()
 

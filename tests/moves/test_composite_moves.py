@@ -214,7 +214,7 @@ def test_composite_displacement_move(bulk_medium, rng):
     assert composite_move.displaced_labels == [None, 0]
     assert composite_move.number_of_moved_particles == 1
 
-    move_2.check_move = lambda: False
+    move_2.check_move = lambda *args, **kwargs: False
 
     composite_move(context)
 
@@ -228,7 +228,7 @@ def test_composite_displacement_move(bulk_medium, rng):
     move_1.set_labels([0, 1, 2, 3])
     move_2.set_labels([0, 1, 2, 3])
 
-    move_2.check_move = lambda: True
+    move_2.check_move = lambda *args, **kwargs: True
 
     composite_move_5(context)
 
