@@ -193,5 +193,4 @@ class GrandCanonicalCriteria(BaseCriteria):
         ) / (context.temperature * kB)
 
         criteria = math.exp(exponential)
-
         return context.rng.random() < criteria * prefactor

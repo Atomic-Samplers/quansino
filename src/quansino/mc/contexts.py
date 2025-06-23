@@ -256,6 +256,8 @@ class ExchangeContext(DisplacementContext):
 
         self.particle_delta = 0
 
+        super().reset()
+
     def revert_state(self) -> None:
         """
         Revert the context to the last saved state.

@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from ase.md.md import MolecularDynamics
     from ase.optimize.optimize import Optimizer
 
-    from quansino.mc.core import MonteCarlo
+    from quansino.mc.driver import Driver
     from quansino.type_hints import Stress
 
 
@@ -166,7 +166,7 @@ class Logger(TextObserver):
             "is_array": is_array,
         }
 
-    def add_mc_fields(self, simulation: MonteCarlo) -> None:
+    def add_mc_fields(self, simulation: Driver) -> None:
         """
         Convenience function to add commonly used fields for [`MonteCarlo`][quansino.mc.core.MonteCarlo] simulations, add the following fields to the logger:
 
@@ -185,7 +185,7 @@ class Logger(TextObserver):
             lambda: simulation.step_count,
             simulation.atoms.get_potential_energy,
         ]
-        str_formats = ["{:>24s}", "{:<12d}", "{:>12.4f}"]
+        str_formats = ["{:<24s}", "{:>12d}", "{:>12.4f}"]
 
         for name, function, str_format in zip(
             names, functions, str_formats, strict=False

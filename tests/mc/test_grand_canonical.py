@@ -268,13 +268,13 @@ def test_grand_canonical_atomic_simulation(empty_atoms, rng):
 
     old_atoms = empty_atoms.copy()
 
-    move.check_move = lambda: False
+    move.check_move = lambda *args, **kwargs: False
 
     for _ in range(10):
         assert not move(gcmc.context)
         assert empty_atoms == old_atoms
 
-    move.check_move = lambda: True
+    move.check_move = lambda *args, **kwargs: True
 
     for _ in range(100):
         assert move(gcmc.context)

@@ -78,7 +78,7 @@ class CellMove[OperationType: Operation, ContextType: DeformationContext](
                 apply_constraint=self.apply_constraints,
             )
 
-            if self.check_move():
+            if self.check_move(context):
                 return True
 
             atoms.cell = old_cell

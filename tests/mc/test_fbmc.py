@@ -1,16 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 import numpy as np
 import pytest
 from ase.constraints import FixAtoms
 from numpy.testing import assert_allclose
 
 from quansino.mc.fbmc import ForceBias
-
-if TYPE_CHECKING:
-    from numpy.typing import NDArray
 
 
 def test_force_bias(bulk_small, tmp_path):
@@ -45,7 +40,7 @@ def test_force_bias_mass_setter(bulk_small, tmp_path):
 
     fbmc.atoms.symbols[1] = "Au"
 
-    fbmc.set_masses_scaling_power({"Cu": 0.5, "Au": 0.1})
+    fbmc.masses_scaling_power = {"Cu": 0.5, "Au": 0.1}
 
     expected = np.full((len(fbmc.atoms), 3), 0.5)
     expected[1, :] = 0.1
@@ -54,19 +49,20 @@ def test_force_bias_mass_setter(bulk_small, tmp_path):
     expected_masses[1, :] = 196.96657
     fbmc.update_masses()
 
-    assert_allclose(fbmc.shaped_masses, expected_masses)  # type: ignore[shape]
-    a: NDArray[np.floating] = fbmc.masses_scaling_power
+    assert_allclose(fbmc.shaped_masses, expected_masses)
+
+    a = fbmc.masses_scaling_power
     assert_allclose(a, expected)
 
     rng = np.random.default_rng()
     random = rng.random((len(fbmc.atoms), 3))
 
-    fbmc.masses_scaling_power = random  # type: ignore[shape]
+    fbmc.masses_scaling_power = random
 
     assert_allclose(fbmc.masses_scaling_power, random)
 
     with pytest.raises(ValueError):
-        fbmc.set_masses_scaling_power([0.5, 0.5])  # type: ignore[shape]
+        fbmc.masses_scaling_power = [0.5, 0.5]
 
 
 def test_fbmc_restart(bulk_small, tmp_path):

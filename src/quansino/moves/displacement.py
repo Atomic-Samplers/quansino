@@ -115,7 +115,7 @@ class DisplacementMove[OperationType: Operation, ContextType: DisplacementContex
                 atoms.positions + translation, apply_constraint=self.apply_constraints
             )
 
-            if self.check_move():
+            if self.check_move(context):
                 return True
 
             atoms.positions = old_positions
