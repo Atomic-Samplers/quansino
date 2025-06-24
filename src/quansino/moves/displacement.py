@@ -208,7 +208,7 @@ class DisplacementMove[OperationType: Operation, ContextType: DisplacementContex
         self, added_indices: IntegerArray, removed_indices: IntegerArray
     ) -> None:
         """
-        Update the move by resetting the labels and updating the operation.
+        Update the labels of the atoms when atoms are added or removed. If atoms are added, the default label is used for the new atoms. If atoms are removed, the labels of the remaining atoms are updated accordingly.
 
         Parameters
         ----------
