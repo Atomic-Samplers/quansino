@@ -249,6 +249,10 @@ class DisplacementMove[OperationType: Operation, ContextType: DisplacementContex
         return dictionary
 
 
+class HMCDisplacementMove(DisplacementMove):
+    pass
+
+
 class CompositeDisplacementMove(CompositeMove[DisplacementMove]):
     """
     Class to perform a composite displacement operation on atoms. This class is returned when adding or multiplying [`DisplacementMove`][quansino.moves.displacement.DisplacementMove] objects together.

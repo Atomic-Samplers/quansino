@@ -250,10 +250,10 @@ class Verlet(BaseOperation):
 
         Parameters
         ----------
-        context : Context
-            The simulation context containing the atoms.
         dt : float, optional
             The time step for the integration in femtoseconds, by default 1.0 fs.
+        max_steps : int, optional
+            The maximum number of steps to perform in the integration, by default 100.
         """
         self.dt = dt
         self.max_steps = max_steps
