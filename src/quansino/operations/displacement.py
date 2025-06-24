@@ -222,3 +222,64 @@ class TranslationRotation(BaseOperation):
 
     def calculate(self, context: DisplacementContext) -> Displacement:
         return self.translation.calculate(context) + self.rotation.calculate(context)  # type: ignore
+
+
+class Verlet(BaseOperation):
+    """
+    Class for a Verlet operation that displaces atoms based on their forces.
+
+    This operation uses the Verlet algorithm to displace atoms based on their
+    forces, scaled by a delta factor and adjusted by the masses of the atoms.
+
+    Parameters
+    ----------
+    delta : float, optional
+        The scaling factor for the displacement (default is 1.0).
+    masses_scaling_power : float, optional
+        The power to which the masses are raised for scaling (default is 0.5).
+
+    Returns
+    -------
+    Displacement
+        A displacement vector for the selected atoms based on their forces.
+    """
+
+    def __init__(self, dt: float = 1.0, max_steps=100) -> None:
+        """
+        Initialize the Velocity Verlet move.
+
+        Parameters
+        ----------
+        context : Context
+            The simulation context containing the atoms.
+        dt : float, optional
+            The time step for the integration in femtoseconds, by default 1.0 fs.
+        """
+        self.dt = dt
+        self.max_steps = max_steps
+
+    def evaluate(self, context: DisplacementContext) -> None:
+        """
+        Perform a single step of the Velocity Verlet integration.
+
+        Parameters
+        ----------
+        context : DisplacementContext
+            The simulation context containing the atoms.
+        """
+        atoms = context.atoms
+        positions = atoms.get_positions()
+        masses = atoms.get_masses()[:, None]
+        forces = atoms.get_forces()
+
+        for _ in range(self.max_steps):
+            # old_positions = atoms.get_positions()
+            new_momenta = atoms.get_momenta() + 0.5 * forces * self.dt
+
+            atoms.set_positions(atoms.get_positions() + new_momenta / masses * self.dt)
+
+            if atoms.constraints:
+                new_momenta = (atoms.get_positions() - positions) * masses / self.dt
+
+            forces = atoms.get_forces()
+            atoms.set_momenta(new_momenta + 0.5 * forces * self.dt)

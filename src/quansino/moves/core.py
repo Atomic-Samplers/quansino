@@ -73,7 +73,6 @@ class BaseMove[OperationType: Operation, ContextType: Context]:
         ]
 
         self.max_attempts = 10000
-
         self.check_move: Callable[..., bool] = lambda *_args, **_kwargs: True
 
     def __call__(self, context: ContextType) -> bool:
