@@ -6,13 +6,21 @@ from typing import TYPE_CHECKING, Any, Literal
 
 import numpy as np
 
-from quansino.mc.contexts import DisplacementContext
+from quansino.integrators.displacement import Verlet
+from quansino.mc.contexts import (
+    Context,
+    DisplacementContext,
+    HamiltonianDisplacementContext,
+)
 from quansino.moves.composite import CompositeMove
 from quansino.moves.core import BaseMove
 from quansino.operations.displacement import Ball
-from quansino.protocols import Operation
+from quansino.protocols import Integrator, Operation
+from quansino.utils.dynamics import maxwell_boltzmann_distribution
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from quansino.type_hints import IntegerArray
 
 
@@ -249,8 +257,87 @@ class DisplacementMove[OperationType: Operation, ContextType: DisplacementContex
         return dictionary
 
 
-class HMCDisplacementMove(DisplacementMove):
-    pass
+class HamiltonianDisplacementMove[
+    OperationType: Integrator, ContextType: HamiltonianDisplacementContext
+](BaseMove[OperationType, ContextType]):
+    """
+    Class for Hamiltonian displacement moves that displaces atoms using a Hamiltonian integrator. The class uses the `distribution` attribute to sample momenta from a distribution before attempting the move. The class will use an [`Integrator`][quansino.integrators.core.Integrator] to perform the move.
+
+    Parameters
+    ----------
+    distribution : Callable[[DisplacementContext], None], optional
+        The distribution to sample momenta from before attempting the move, by default [`maxwell_boltzmann_distribution`][quansino.utils.dynamics.maxwell_boltzmann_distribution].
+    operation : OperationType | None, optional
+        The operation to perform in the move, by default None.
+    apply_constraints : bool, optional
+        Whether to apply constraints to the move, by default True.
+    """
+
+    def __init__(
+        self,
+        distribution: Callable[
+            [DisplacementContext], None
+        ] = maxwell_boltzmann_distribution,
+        operation: OperationType | None = None,
+    ) -> None:
+        """Initialize the `HMCDisplacementMove` object."""
+        super().__init__(operation, apply_constraints=True)
+
+        self.max_attempts: int = 10
+        self.distribution: Callable[[ContextType], None] = distribution
+
+    def attempt_displacement(
+        self, context: ContextType, sample_momenta: bool = True
+    ) -> bool:
+        """
+        Attempt to move the atoms using the provided integrator and check against `check_move`. The move is attempted `max_attempts` number of times. If the move is successful, return True, otherwise, return False.
+
+        Parameters
+        ----------
+        context : ContextType
+            The context for the move.
+        sample_momenta : bool, optional
+            Whether to sample the momenta from the distribution before attempting the move, by default True.
+
+        Returns
+        -------
+        bool
+            Whether the move was valid.
+        """
+        atoms = context.atoms
+        old_positions = atoms.get_positions()
+        old_momenta = atoms.get_momenta()
+
+        for _ in range(self.max_attempts):
+            if sample_momenta:
+                self.distribution(context)
+                context.last_kinetic_energy = atoms.get_kinetic_energy()
+
+            self.operation.integrate(context)
+
+            if self.check_move(context):
+                return True
+
+            atoms.positions = old_positions
+            atoms.set_array("momenta", old_momenta, float, (3,))
+            Context.revert_state(context)
+
+        return False
+
+    def __call__(self, context: ContextType) -> bool:
+        return self.attempt_displacement(context)
+
+    @property
+    def default_operation(self) -> Integrator:
+        """
+        Get the default operation for the move.
+
+        Returns
+        -------
+        OperationType
+            The default operation for the move.
+        """
+        return Verlet()
 
 
 class CompositeDisplacementMove(CompositeMove[DisplacementMove]):
