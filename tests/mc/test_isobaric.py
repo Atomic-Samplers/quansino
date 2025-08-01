@@ -55,8 +55,8 @@ def test_isobaric(bulk_small, rng, tmp_path):
 
     assert_allclose(mc.context.last_cell, bulk_small.cell)
     assert_allclose(mc.context.last_positions, bulk_small.get_positions())
-    assert np.isnan(mc.context.last_energy)
-    assert mc.last_results == {}
+    assert np.isnan(mc.context.last_potential_energy)
+    assert mc.context.last_results == {}
 
     old_cell = mc.atoms.cell.copy()
     old_positions = mc.atoms.get_positions().copy()
@@ -91,11 +91,11 @@ def test_isobaric(bulk_small, rng, tmp_path):
                 assert_allclose(mc.context.last_positions, mc.atoms.get_positions())
                 assert_allclose(mc.context.last_cell, mc.atoms.cell)
             else:
-                assert mc.atoms.calc.results.keys() == mc.last_results.keys()
+                assert mc.atoms.calc.results.keys() == mc.context.last_results.keys()
                 assert all(
-                    np.allclose(mc.last_results[k], mc.atoms.calc.results[k])
-                    for k in mc.last_results
-                    if isinstance(mc.last_results[k], str | float | int)
+                    np.allclose(mc.context.last_results[k], mc.atoms.calc.results[k])
+                    for k in mc.context.last_results
+                    if isinstance(mc.context.last_results[k], str | float | int)
                 )
 
             assert not compare_atoms(mc.atoms.calc.atoms, mc.atoms)

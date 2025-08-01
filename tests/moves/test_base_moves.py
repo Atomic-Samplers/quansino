@@ -1,28 +1,54 @@
 from __future__ import annotations
 
-from tests.conftest import DummyOperation
+import pytest
+from tests.conftest import DummyContext, DummyMove, DummyOperation
 
-from quansino.mc.contexts import Context
+from quansino.moves.composite import CompositeMove
 from quansino.moves.core import BaseMove
 
 
-def test_base_move(bulk_small, rng):
-    """Test the `BaseMove` class."""
-
-    move = BaseMove(DummyOperation(), apply_constraints=True)
-    assert move.max_attempts == 10000
-    assert move.operation is not None
+def test_base_move_initialization():
+    """Test `BaseMove` initialization with different parameters."""
+    move = DummyMove(DummyOperation())
+    assert isinstance(move.operation, DummyOperation)
+    assert move.operation.name == "DummyOperation"
     assert move.apply_constraints is True
-    assert not hasattr(move, "context")
+    assert move.max_attempts == 10000
 
-    context = Context(bulk_small, rng)
+    custom_op = DummyOperation("CustomOperation")
+    move = DummyMove(operation=custom_op, apply_constraints=False)
+    assert move.operation is custom_op
+    assert move.operation.name == "CustomOperation"  # type: ignore
+    assert move.apply_constraints is False
 
-    move(context)
 
-    assert move.operation.move_count == 1
+def test_base_move_call():
+    """Test that `BaseMove` uses the default operation if none is provided."""
+    move = BaseMove(DummyOperation())
 
-    move.check_move = lambda: False
+    assert not hasattr(move, "__dict__")
 
-    move(context)
+    with pytest.raises(NotImplementedError):
+        move(DummyContext())
 
-    assert move.operation.move_count == 2
+
+def test_base_move_default_operation():
+    """Test that `BaseMove` uses the default operation if none is provided."""
+    move = BaseMove(DummyOperation())
+
+    with pytest.raises(NotImplementedError):
+        _ = move.default_operation
+
+
+def test_base_move_addition():
+    """Test adding `BaseMove`s together."""
+    move1 = DummyMove(DummyOperation("1"))
+    move2 = DummyMove(DummyOperation("2"))
+
+    composite = move1 + move2
+
+    assert isinstance(composite, CompositeMove)
+    assert len(composite.moves) == 2
+
+    assert composite.moves[0].operation.name == "1"  # type: ignore
+    assert composite.moves[1].operation.name == "2"  # type: ignore

@@ -220,14 +220,14 @@ def test_grand_canonical_simulation(bulk_medium):
 
         if gcmc.acceptance_rate:
             assert bulk_medium != old_atoms
-            if "energy" in gcmc.last_results:
+            if "energy" in gcmc.context.last_results:
                 assert not np.allclose(
-                    gcmc.last_results["energy"], old_energy, atol=1e-8, rtol=0
+                    gcmc.context.last_results["energy"], old_energy, atol=1e-8, rtol=0
                 )
         else:
             assert bulk_medium == old_atoms
-            if "energy" in gcmc.last_results:
-                assert_allclose(gcmc.last_results["energy"], old_energy)
+            if "energy" in gcmc.context.last_results:
+                assert_allclose(gcmc.context.last_results["energy"], old_energy)
 
         old_atoms = bulk_medium.copy()
         old_energy = bulk_medium.get_potential_energy()
@@ -458,7 +458,7 @@ def test_displacement_consistency_manually(bulk_small):
         assert move(gcmc.context)
         bulk_small.get_potential_energy()
         gcmc.save_state()
-        assert gcmc.last_results == bulk_small.calc.results
+        assert gcmc.context.last_results == bulk_small.calc.results
         assert move(gcmc.context)
         gcmc.revert_state()
         assert len(bulk_small.calc.check_state(bulk_small)) == 0
@@ -519,7 +519,7 @@ def test_exchange_consistency_manually(empty_atoms, rng):
         assert move(gcmc.context)
         empty_atoms.get_potential_energy()
         gcmc.save_state()
-        assert gcmc.last_results == empty_atoms.calc.results
+        assert gcmc.context.last_results == empty_atoms.calc.results
         assert move(gcmc.context)
         gcmc.revert_state()
         assert len(empty_atoms.calc.check_state(empty_atoms)) == 0
@@ -534,7 +534,7 @@ def test_exchange_consistency_manually(empty_atoms, rng):
 def test_grand_canonical_criteria(rng):
     """Test the `GrandCanonicalCriteria` class."""
     context = ExchangeContext(Atoms(), rng)
-    context.last_energy = 0.0
+    context.last_potential_energy = 0.0
 
     dummy_calc = DummyCalculator()
     dummy_calc.dummy_value = -np.inf
@@ -636,8 +636,8 @@ def test_grand_canonical_restart(bulk_small, tmp_path, rng):
     assert reconstructed_mc.max_cycles == mc.max_cycles
     assert reconstructed_mc.step_count == mc.step_count
 
-    assert reconstructed_mc.last_results == mc.last_results
-    assert np.isnan(reconstructed_mc.context.last_energy)
+    assert reconstructed_mc.context.last_results == mc.context.last_results
+    assert np.isnan(reconstructed_mc.context.last_potential_energy)
     assert_allclose(reconstructed_mc.context.last_positions, mc.context.last_positions)
     assert reconstructed_mc.moves.keys() == mc.moves.keys()
 
@@ -657,13 +657,14 @@ def test_grand_canonical_restart(bulk_small, tmp_path, rng):
 
     energies = []
 
-    mc.context.last_energy = np.nan
-    reconstructed_mc.context.last_energy = np.nan
+    mc.context.last_potential_energy = np.nan
+    reconstructed_mc.context.last_potential_energy = np.nan
 
-    energies = [mc.context.last_energy for _ in mc.irun(20)]
+    energies = [mc.context.last_potential_energy for _ in mc.irun(20)]
 
     energies_reconstructed = [
-        reconstructed_mc.context.last_energy for _ in reconstructed_mc.irun(20)
+        reconstructed_mc.context.last_potential_energy
+        for _ in reconstructed_mc.irun(20)
     ]
 
     assert_allclose(energies, energies_reconstructed)
@@ -674,7 +675,7 @@ def test_grand_canonical_restart(bulk_small, tmp_path, rng):
         assert len(mc.move_history) == 1
         assert mc.move_history[0][0] == "default"
 
-        energies.append(mc.context.last_energy)
+        energies.append(mc.context.last_potential_energy)
 
     energies_reconstructed = []
 
@@ -685,7 +686,7 @@ def test_grand_canonical_restart(bulk_small, tmp_path, rng):
             for _ in current_mc.step():
                 ...
             i += 1
-            energies_reconstructed.append(current_mc.context.last_energy)
+            energies_reconstructed.append(current_mc.context.last_potential_energy)
 
             if rng.random() < 0.5:
                 break
