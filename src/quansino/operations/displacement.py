@@ -1,12 +1,14 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 
 from quansino.operations.core import BaseOperation
 
 if TYPE_CHECKING:
+    from ase.atoms import Atoms
+
     from quansino.mc.contexts import DisplacementContext
     from quansino.type_hints import Displacement
 
@@ -63,7 +65,7 @@ class Box(DisplacementOperation):
     """
 
     def calculate(self, context: DisplacementContext) -> Displacement:
-        return context.rng.uniform(-self.step_size, self.step_size, size=(1, 3))  # type: ignore
+        return context.rng.uniform(-self.step_size, self.step_size, size=(1, 3))
 
 
 class Sphere(DisplacementOperation):
@@ -104,7 +106,7 @@ class Sphere(DisplacementOperation):
 
         return self.step_size * np.column_stack(
             (sin_theta * np.cos(phi), sin_theta * np.sin(phi), cos_theta)
-        )  # type: ignore
+        )
 
 
 class Ball(DisplacementOperation):
@@ -147,7 +149,7 @@ class Ball(DisplacementOperation):
 
         return np.column_stack(
             (r * sin_theta * np.cos(phi), r * sin_theta * np.sin(phi), r * cos_theta)
-        )  # type: ignore
+        )
 
 
 class Translation(BaseOperation):
@@ -189,11 +191,11 @@ class Rotation(BaseOperation):
     def calculate(self, context: DisplacementContext) -> Displacement:
         atoms = context.atoms
 
-        molecule = atoms[context._moving_indices]
+        molecule = cast("Atoms", atoms[context._moving_indices])
         phi, theta, psi = context.rng.uniform(0, 2 * np.pi, 3)
-        molecule.euler_rotate(phi, theta, psi, center="COM")  # type: ignore
+        molecule.euler_rotate(phi, theta, psi, center="COM")
 
-        return molecule.positions - context.atoms.positions[context._moving_indices]  # type: ignore
+        return molecule.positions - context.atoms.positions[context._moving_indices]
 
 
 class TranslationRotation(BaseOperation):
@@ -221,4 +223,4 @@ class TranslationRotation(BaseOperation):
         self.rotation = Rotation()
 
     def calculate(self, context: DisplacementContext) -> Displacement:
-        return self.translation.calculate(context) + self.rotation.calculate(context)  # type: ignore
+        return self.translation.calculate(context) + self.rotation.calculate(context)
