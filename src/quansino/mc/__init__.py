@@ -8,6 +8,10 @@ from quansino.mc.contexts import (
     DeformationContext,
     DisplacementContext,
     ExchangeContext,
+    HamiltonianContext,
+    HamiltonianDeformationContext,
+    HamiltonianDisplacementContext,
+    HamiltonianExchangeContext,
 )
 from quansino.mc.core import MonteCarlo
 from quansino.mc.criteria import (
@@ -34,20 +38,26 @@ __all__ = [
     "ForceBias",
     "GrandCanonical",
     "GrandCanonicalCriteria",
+    "HamiltonianContext",
+    "HamiltonianDeformationContext",
+    "HamiltonianDisplacementContext",
+    "HamiltonianExchangeContext",
     "Isobaric",
     "IsobaricCriteria",
     "MonteCarlo",
 ]
 
 mc_registry = {
+    "BaseCriteria": BaseCriteria,
     "Canonical": Canonical,
+    "CanonicalCriteria": CanonicalCriteria,
+    "Context": Context,
+    "DeformationContext": DeformationContext,
+    "DisplacementContext": DisplacementContext,
+    "ExchangeContext": ExchangeContext,
     "Isobaric": Isobaric,
     "GrandCanonical": GrandCanonical,
     "ForceBias": ForceBias,
-    "DisplacementContext": DisplacementContext,
-    "ExchangeContext": ExchangeContext,
-    "DeformationContext": DeformationContext,
-    "CanonicalCriteria": CanonicalCriteria,
     "IsobaricCriteria": IsobaricCriteria,
     "GrandCanonicalCriteria": GrandCanonicalCriteria,
     "MonteCarlo": MonteCarlo,

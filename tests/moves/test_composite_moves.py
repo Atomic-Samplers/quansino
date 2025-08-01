@@ -5,7 +5,7 @@ import pytest
 from ase.atoms import Atoms
 from ase.build import molecule
 from numpy.testing import assert_allclose
-from tests.conftest import DummyOperation
+from tests.conftest import DummyMove, DummyOperation
 
 from quansino.mc.contexts import Context, DisplacementContext, ExchangeContext
 from quansino.moves.composite import CompositeMove
@@ -17,10 +17,10 @@ from quansino.operations import Sphere
 
 def test_composite_move(bulk_small, rng):
     """Test the `CompositeMove` class."""
-    move1 = BaseMove(DummyOperation(), apply_constraints=True)
-    move2 = BaseMove(DummyOperation(), apply_constraints=False)
+    move1 = DummyMove(DummyOperation(), apply_constraints=True)
+    move2 = DummyMove(DummyOperation(), apply_constraints=False)
 
-    composite_move = CompositeMove[BaseMove]([move1, move2])
+    composite_move = CompositeMove[DummyMove]([move1, move2])
 
     assert len(composite_move) == 2
 
@@ -36,7 +36,7 @@ def test_composite_move(bulk_small, rng):
 
     composite_move(context)
 
-    assert composite_move.moves[0].operation.move_count == 1
+    assert composite_move.moves[0].operation.move_count == 1  # type: ignore
 
     bigger_move = composite_move * 2
 
@@ -282,7 +282,7 @@ def test_composite_exchange_move(empty_atoms, rng):
 
     assert len(context.atoms) == 2
 
-    assert not np.allclose(context.atoms[0].position, context.atoms[1].position)
+    assert not np.allclose(context.atoms[0].position, context.atoms[1].position)  # type: ignore
 
     for i in range(50):
         composite_move(context)

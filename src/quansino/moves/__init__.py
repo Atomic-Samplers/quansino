@@ -7,7 +7,11 @@ from typing import TYPE_CHECKING
 from quansino.moves.cell import CellMove
 from quansino.moves.composite import CompositeMove
 from quansino.moves.core import BaseMove
-from quansino.moves.displacement import CompositeDisplacementMove, DisplacementMove
+from quansino.moves.displacement import (
+    CompositeDisplacementMove,
+    DisplacementMove,
+    HamiltonianDisplacementMove,
+)
 from quansino.moves.exchange import ExchangeMove
 from quansino.registry import register_class
 
@@ -20,6 +24,7 @@ __all__ = [
     "CompositeDisplacementMove",
     "DisplacementMove",
     "ExchangeMove",
+    "HamiltonianDisplacementMove",
 ]
 
 moves_registry: dict[str, type[Move]] = {
@@ -29,6 +34,7 @@ moves_registry: dict[str, type[Move]] = {
     "DisplacementMove": DisplacementMove,
     "CompositeDisplacementMove": CompositeDisplacementMove,
     "ExchangeMove": ExchangeMove,
+    "HamiltonianDisplacementMove": HamiltonianDisplacementMove,
 }
 
 for name, cls in moves_registry.items():
