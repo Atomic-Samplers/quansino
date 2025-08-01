@@ -106,8 +106,6 @@ class MonteCarlo[MoveType: Move, CriteriaType: Criteria](Driver):
 
         self.max_cycles = max_cycles
 
-        self.last_results: dict[str, Any] = {}
-
         self.acceptance_rate = 0.0
         self.move_history: list[tuple[str, bool | None]] = []
 
@@ -211,14 +209,14 @@ class MonteCarlo[MoveType: Move, CriteriaType: Criteria](Driver):
             )
 
         try:
-            self.last_results = self.atoms.calc.results  # type: ignore[try-attr]
+            self.context.last_results = self.atoms.calc.results  # type: ignore[try-attr]
         except AttributeError:
             warn(
                 "Atoms object does not have calculator attached, or does not support the `results` attribute.",
                 UserWarning,
                 2,
             )
-            self.last_results = {}
+            self.context.last_results = {}
 
         super().validate_simulation()
 
@@ -257,9 +255,6 @@ class MonteCarlo[MoveType: Move, CriteriaType: Criteria](Driver):
 
         dictionary.setdefault("kwargs", {}).update(
             {"max_cycles": self.max_cycles, "seed": self.__seed}
-        )
-        dictionary.setdefault("attributes", {}).update(
-            {"last_results": self.last_results}
         )
 
         return dictionary
@@ -384,30 +379,11 @@ class MonteCarlo[MoveType: Move, CriteriaType: Criteria](Driver):
         """
         self.context.save_state()
 
-        try:
-            self.last_results = self.atoms.calc.results  # type: ignore[try-attr]
-        except AttributeError:
-            warn(
-                "Atoms object does not have calculator results attached.",
-                UserWarning,
-                2,
-            )
-            self.last_results = {}
-
     def revert_state(self) -> None:
         """
         Revert the last move made by the simulation. This method is called when a move is rejected.
         """
         self.context.revert_state()
-
-        try:
-            self.atoms.calc.results = self.last_results  # type: ignore[try-attr]
-        except AttributeError:
-            warn(
-                "Atoms object does not have calculator attached, or does not support the `results` attribute",
-                UserWarning,
-                2,
-            )
 
     def __repr__(self) -> str:
         """

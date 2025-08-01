@@ -6,7 +6,6 @@ from quansino.operations.composite import CompositeOperation
 
 if TYPE_CHECKING:
     from quansino.mc.contexts import Context
-    from quansino.operations.core import BaseOperation
     from quansino.protocols import Operation
 
 
@@ -27,7 +26,7 @@ class BaseOperation:
 
     __slots__ = ()
 
-    def calculate(self, context: Context, *args, **kwargs) -> Any:
+    def calculate(self, context: Context, *args: Any, **kwargs: Any) -> Any:
         """
         Calculate the operation to perform based on the given context.
 
@@ -35,8 +34,10 @@ class BaseOperation:
         ----------
         context : Context
             The context to use when calculating the operation.
-        *args, **kwargs
-            Additional arguments for the operation.
+        *args : Any
+            Additional positional arguments for the operation.
+        **kwargs : Any
+            Additional keyword arguments for the operation.
 
         Returns
         -------
@@ -46,14 +47,17 @@ class BaseOperation:
 
     def to_dict(self) -> dict[str, Any]:
         """
-        Convert the operation to a dictionary representation.
+        Convert the `Operation` object to a dictionary representation.
 
         Returns
         -------
         dict[str, Any]
-            The dictionary representation of the operation.
+            The dictionary representation of the `Operation` object.
         """
         return {"name": self.__class__.__name__}
+
+    @overload
+    def __add__(self, other: Operation) -> CompositeOperation[Operation]: ...
 
     @overload
     def __add__(self: T, other: CompositeOperation[T]) -> CompositeOperation[T]: ...
@@ -61,10 +65,7 @@ class BaseOperation:
     @overload
     def __add__(self: T, other: T) -> CompositeOperation[T]: ...
 
-    @overload
-    def __add__(self, other) -> CompositeOperation[BaseOperation]: ...
-
-    def __add__(self, other: Operation) -> CompositeOperation:
+    def __add__(self, other) -> CompositeOperation:
         """
         Combine two operations into a single operation.
 
@@ -87,7 +88,7 @@ class BaseOperation:
         else:
             return CompositeOperation([self, other])
 
-    def __mul__(self, n: int) -> CompositeOperation:
+    def __mul__(self, n: int) -> CompositeOperation[Self]:
         """
         Multiply the operation by an integer to create a composite operation.
 
@@ -105,6 +106,7 @@ class BaseOperation:
             raise ValueError(
                 "The number of times the move is repeated must be a positive, non-zero integer."
             )
+
         return CompositeOperation([self] * n)
 
     __rmul__ = __mul__
@@ -112,17 +114,17 @@ class BaseOperation:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
         """
-        Create an operation from a dictionary.
+        Create an `Operation` object from a dictionary.
 
         Parameters
         ----------
         data : dict[str, Any]
-            The dictionary representation of the operation.
+            The dictionary representation of the `Operation` object.
 
         Returns
         -------
-        Operation
-            The operation object created from the dictionary.
+        Self
+            The `Operation` object created from the dictionary.
         """
         kwargs = data.get("kwargs", {})
         instance = cls(**kwargs)

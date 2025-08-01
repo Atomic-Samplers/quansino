@@ -7,10 +7,10 @@ from numpy.random import default_rng
 from numpy.testing import assert_allclose, assert_array_equal, assert_equal
 from tests.conftest import DummyCalculator
 
-from quansino.mc.canonical import Canonical
-from quansino.mc.contexts import DisplacementContext
+from quansino.mc.canonical import Canonical, HamiltonianCanonical
+from quansino.mc.contexts import DisplacementContext, HamiltonianDisplacementContext
 from quansino.mc.criteria import BaseCriteria, CanonicalCriteria
-from quansino.moves.displacement import DisplacementMove
+from quansino.moves.displacement import DisplacementMove, HamiltonianDisplacementMove
 from quansino.operations.displacement import Ball
 from quansino.utils.moves import MoveStorage
 
@@ -35,7 +35,7 @@ def test_canonical(bulk_small, tmp_path):
     assert mc.temperature == 10.0
     assert mc.max_cycles == len(bulk_small)
     assert mc.atoms == bulk_small
-    assert mc.last_results == {}
+    assert mc.context.last_results == {}
 
     assert_allclose(mc.context.last_positions, bulk_small.get_positions())
 
@@ -54,7 +54,7 @@ def test_canonical(bulk_small, tmp_path):
     assert isinstance(mc.moves["default_displacement_move"].move.operation, Ball)
     assert isinstance(mc.moves["default_displacement_move"].criteria, CanonicalCriteria)
 
-    mc.context.last_energy = 0.0
+    mc.context.last_potential_energy = 0.0
 
     assert mc.moves["default_displacement_move"].probability == 1.0
     assert mc.moves["default_displacement_move"].interval == 1
@@ -72,9 +72,9 @@ def test_canonical(bulk_small, tmp_path):
         pass
 
     if mc.acceptance_rate:
-        assert not np.allclose(mc.last_results["energy"], energy)
+        assert not np.allclose(mc.context.last_results["energy"], energy)
     else:
-        assert_allclose(mc.last_results["energy"], energy)
+        assert_allclose(mc.context.last_results["energy"], energy)
 
     mc.run(10)
 
@@ -102,10 +102,10 @@ def test_canonical(bulk_small, tmp_path):
         if mc.acceptance_rate:
             pass
         else:
-            assert mc.atoms.calc.results.keys() == mc.last_results.keys()
+            assert mc.atoms.calc.results.keys() == mc.context.last_results.keys()
             assert all(
-                np.allclose(mc.last_results[k], mc.atoms.calc.results[k])
-                for k in mc.last_results
+                np.allclose(mc.context.last_results[k], mc.atoms.calc.results[k])
+                for k in mc.context.last_results
             )
 
         assert_allclose(mc.context.last_positions, mc.atoms.get_positions())
@@ -142,6 +142,50 @@ def test_canonical(bulk_small, tmp_path):
     mc.save_state()
 
 
+def test_hamiltonian_canonical(bulk_small, tmp_path):
+    """Test the `Canonical` class with a Hamiltonian."""
+    move = HamiltonianDisplacementMove()
+
+    mc = HamiltonianCanonical(
+        bulk_small,
+        temperature=2000.0,
+        default_displacement_move=move,
+        logfile=tmp_path / "mc.log",
+        trajectory=tmp_path / "mc.xyz",
+    )
+    mc.moves["default_displacement_move"].move.operation.max_steps = 5
+
+    assert_allclose(mc.context.last_positions, bulk_small.get_positions())
+    assert_allclose(mc.context.last_momenta, bulk_small.get_momenta())
+
+    data = mc.to_dict()
+
+    assert data["name"] == "HamiltonianCanonical"
+    assert data["attributes"]["step_count"] == 0
+    assert data["context"]["temperature"] == 2000.0
+    assert data["kwargs"]["seed"] == mc._MonteCarlo__seed  # type: ignore
+    assert data["rng_state"] == mc._rng.bit_generator.state
+
+    assert isinstance(mc.context, HamiltonianDisplacementContext)
+
+    acceptances = []
+    for _ in mc.srun(50):
+        assert mc.atoms.calc is not None
+        assert not compare_atoms(mc.atoms.calc.atoms, mc.atoms)
+
+        assert mc.atoms.calc.results.keys() == mc.context.last_results.keys()
+        assert all(
+            np.allclose(mc.context.last_results[k], mc.atoms.calc.results[k])
+            for k in ["energy", "forces"]
+        )
+
+        assert_allclose(mc.context.last_positions, mc.atoms.get_positions())
+        assert_allclose(mc.context.last_momenta, mc.atoms.get_momenta())
+        acceptances.append(mc.acceptance_rate)
+
+    assert np.allclose(np.sum(acceptances), 50, atol=5)
+
+
 def test_canonical_restart(bulk_small, tmp_path):
     """Test the `Canonical` class with restart functionality."""
     move = DisplacementMove(np.arange(len(bulk_small)), Ball(0.1))
@@ -156,7 +200,7 @@ def test_canonical_restart(bulk_small, tmp_path):
         logging_interval=5,
     )
 
-    mc.context.last_energy = 0.0
+    mc.context.last_potential_energy = 0.0
 
     data = mc.to_dict()
 
@@ -168,8 +212,11 @@ def test_canonical_restart(bulk_small, tmp_path):
     assert reconstructed_mc.max_cycles == mc.max_cycles
     assert reconstructed_mc.step_count == mc.step_count
 
-    assert reconstructed_mc.last_results == mc.last_results
-    assert reconstructed_mc.context.last_energy == mc.context.last_energy
+    assert reconstructed_mc.context.last_results == mc.context.last_results
+    assert (
+        reconstructed_mc.context.last_potential_energy
+        == mc.context.last_potential_energy
+    )
     assert_allclose(reconstructed_mc.context.last_positions, mc.context.last_positions)
     assert reconstructed_mc.moves.keys() == mc.moves.keys()
     assert (
@@ -220,13 +267,14 @@ def test_canonical_restart(bulk_small, tmp_path):
 
     energies = []
 
-    mc.context.last_energy = np.nan
-    reconstructed_mc.context.last_energy = np.nan
+    mc.context.last_potential_energy = np.nan
+    reconstructed_mc.context.last_potential_energy = np.nan
 
-    energies = [mc.context.last_energy for _ in mc.irun(20)]
+    energies = [mc.context.last_potential_energy for _ in mc.irun(20)]
 
     energies_reconstructed = [
-        reconstructed_mc.context.last_energy for _ in reconstructed_mc.irun(20)
+        reconstructed_mc.context.last_potential_energy
+        for _ in reconstructed_mc.irun(20)
     ]
 
     assert_allclose(energies, energies_reconstructed)
@@ -236,7 +284,7 @@ def test_canonical_restart(bulk_small, tmp_path):
     external_rng = default_rng(42)
 
     for _ in mc.srun(20):
-        energies.append(mc.context.last_energy)
+        energies.append(mc.context.last_potential_energy)
 
     energies_reconstructed = []
 
@@ -247,7 +295,7 @@ def test_canonical_restart(bulk_small, tmp_path):
             for _ in current_mc.step():
                 ...
             i += 1
-            energies_reconstructed.append(current_mc.context.last_energy)
+            energies_reconstructed.append(current_mc.context.last_potential_energy)
 
             if external_rng.random() < 0.5:
                 break

@@ -132,3 +132,21 @@ class Operation[ContextType: Context](Serializable, Protocol):
             The result of the calculation, typically a displacement or strain tensor.
         """
         ...
+
+
+@runtime_checkable
+class Integrator[ContextType: Context](Serializable, Protocol):
+    """
+    Base protocol for all integrators in [`MonteCarlo`][quansino.mc.core.MonteCarlo] simulations. Integrators are used to update the state of the system **in place** based on the current context and the operations performed. Integrator classes should implement the [`integrate`][quansino.protocols.Integrator.integrate] method to perform the integration step. Such method take a simulation [`Context`][quansino.mc.contexts.Context] as parameter, which provides the necessary information about the current state of the system, such as atom positions, cell parameters, as well as any additional information needed to perform the integration.
+    """
+
+    def integrate(self, context: ContextType) -> None:
+        """
+        Perform the integration step based on the current context.
+
+        Parameters
+        ----------
+        context : ContextType
+            The context to use when performing the integration step.
+        """
+        ...

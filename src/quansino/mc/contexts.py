@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
+from warnings import warn
 
 import numpy as np
 from ase.atoms import Atoms
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
     from ase.cell import Cell
     from numpy.random import Generator
 
-    from quansino.type_hints import IntegerArray, Positions
+    from quansino.type_hints import IntegerArray, Momenta, Positions
 
 
 class Context:
@@ -42,15 +43,34 @@ class Context:
         self.atoms: Atoms = atoms
         self.rng: Generator = rng
 
+        self.last_results: dict[str, Any] = {}
+
     def save_state(self) -> None:
         """
         Save the current state of the context. This method can be overridden by subclasses to save specific attributes.
         """
+        try:
+            self.last_results = self.atoms.calc.results  # type: ignore[try-attr]
+        except AttributeError:
+            warn(
+                "Atoms object does not have calculator attached, or does not support the `results` attribute",
+                UserWarning,
+                2,
+            )
+            self.last_results = {}
 
     def revert_state(self) -> None:
         """
         Revert the context to the last saved state. This method can be overridden by subclasses to revert specific attributes.
         """
+        try:
+            self.atoms.calc.results = self.last_results  # type: ignore[try-attr]
+        except AttributeError:
+            warn(
+                "Atoms object does not have calculator attached, or does not support the `results` attribute",
+                UserWarning,
+                2,
+            )
 
     def to_dict(self) -> dict[str, Any]:
         """
@@ -61,7 +81,7 @@ class Context:
         dict[str, Any]
             A dictionary representation of the context.
         """
-        return {}
+        return {"last_results": self.last_results}
 
 
 class DisplacementContext(Context):
@@ -87,16 +107,21 @@ class DisplacementContext(Context):
         Integer indices of atoms that are being displaced.
     """
 
-    __slots__ = ("_moving_indices", "last_energy", "last_positions", "temperature")
+    __slots__ = (
+        "_moving_indices",
+        "last_positions",
+        "last_potential_energy",
+        "temperature",
+    )
 
     def __init__(self, atoms: Atoms, rng: Generator) -> None:
-        """Initialize the DisplacementContext object."""
+        """Initialize the `DisplacementContext` object."""
         super().__init__(atoms, rng)
 
         self.temperature: float = 0.0
 
         self.last_positions: Positions = atoms.get_positions()
-        self.last_energy: float = np.nan
+        self.last_potential_energy: float = np.nan
 
         self.reset()
 
@@ -107,11 +132,15 @@ class DisplacementContext(Context):
     def save_state(self) -> None:
         """Save the current state of the context, including the last positions and energy."""
         self.last_positions = self.atoms.get_positions()
-        self.last_energy = self.atoms.get_potential_energy()
+        self.last_potential_energy = self.atoms.get_potential_energy()
+
+        super().save_state()
 
     def revert_state(self) -> None:
         """Revert the context to the last saved state, restoring the last positions."""
         self.atoms.positions = self.last_positions.copy()
+
+        super().revert_state()
 
     def to_dict(self) -> dict[str, Any]:
         """
@@ -123,10 +152,59 @@ class DisplacementContext(Context):
             A dictionary representation of the `DisplacementContext` object.
         """
         return {
+            **super().to_dict(),
             "temperature": self.temperature,
             "last_positions": self.last_positions,
-            "last_energy": self.last_energy,
+            "last_potential_energy": self.last_potential_energy,
         }
+
+
+class HamiltonianContext(Context):
+
+    __slots__ = ()
+
+    def __init__(self, atoms, rng):
+        super().__init__(atoms, rng)
+
+        self.last_momenta: Momenta = atoms.get_momenta()
+        self.last_kinetic_energy: float = np.nan
+
+    def save_state(self) -> None:
+        """
+        Save the current state of the context, including the last momenta and kinetic energy.
+        """
+        self.last_momenta = self.atoms.get_momenta()
+        self.last_kinetic_energy = self.atoms.get_kinetic_energy()
+
+        super().save_state()
+
+    def revert_state(self) -> None:
+        """
+        Revert the context to the last saved state, restoring the last momenta and kinetic energy.
+        """
+        self.atoms.set_array("momenta", self.last_momenta.copy(), float, (3,))
+
+        super().revert_state()
+
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert the `HMCContext` object to a dictionary.
+
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary representation of the `HMCContext` object.
+        """
+        return {
+            **super().to_dict(),
+            "last_momenta": self.last_momenta,
+            "last_kinetic_energy": self.last_kinetic_energy,
+        }
+
+
+class HamiltonianDisplacementContext(HamiltonianContext, DisplacementContext):
+
+    __slots__ = ("last_kinetic_energy", "last_momenta")
 
 
 class DeformationContext(DisplacementContext):
@@ -185,6 +263,11 @@ class DeformationContext(DisplacementContext):
             "pressure": self.pressure,
             "last_cell": self.last_cell,
         }
+
+
+class HamiltonianDeformationContext(HamiltonianContext, DeformationContext):
+
+    __slots__ = ("last_kinetic_energy", "last_momenta")
 
 
 class ExchangeContext(DisplacementContext):
@@ -297,3 +380,8 @@ class ExchangeContext(DisplacementContext):
             "accessible_volume": self.accessible_volume,
             "exchange_atoms": self.exchange_atoms,
         }
+
+
+class HamiltonianExchangeContext(HamiltonianContext, ExchangeContext):
+
+    __slots__ = ("last_kinetic_energy", "last_momenta")
