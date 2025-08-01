@@ -74,7 +74,7 @@ class CompositeMove[MoveType: Move]:
     @overload
     def __add__(self, other: Move) -> CompositeMove[Move]: ...
 
-    def __add__(self, other) -> CompositeMove:
+    def __add__(self, other):
         """
         Add two moves together to create a `CompositeMove` object.
 

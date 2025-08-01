@@ -8,8 +8,13 @@ from ase.atoms import Atoms
 from ase.build import bulk
 from ase.calculators.eam import EAM
 from ase.calculators.emt import EMT
+from numpy.random import Generator as RNG
+from numpy.random import default_rng
 
+from quansino.integrators.core import BaseIntegrator
+from quansino.mc.contexts import Context
 from quansino.mc.criteria import BaseCriteria
+from quansino.moves.core import BaseMove
 from quansino.operations.core import BaseOperation
 
 
@@ -59,32 +64,83 @@ def empty_atoms_fixture() -> Atoms:
 
 
 @pytest.fixture(name="rng")
-def rng_fixture() -> np.random.Generator:
+def rng_fixture() -> RNG:
     return np.random.default_rng()
 
 
 class DummyOperation(BaseOperation):
-    def __init__(self):
+    """A dummy operation that sets all atom positions to zero."""
+
+    def __init__(self, name: str = "DummyOperation") -> None:
         super().__init__()
-        self.name = "DummyOperation"
+        self.name = name
         self.move_count = 0
 
-    def calculate(self, context):
+    def calculate(self, context: Context):
         context.atoms.set_positions(np.zeros((len(context.atoms), 3)))
         self.move_count += 1
 
 
-class DummyCalculator:
-    def __init__(self) -> None:
-        self.dummy_value = -1.0
-        self.results = {"energy": self.dummy_value}
+class DummyIntegrator(BaseIntegrator):
+    """A dummy integrator that does nothing."""
 
-    def get_potential_energy(self, *_args, **_kwargs) -> float:
+    def __init__(self, name: str = "DummyIntegrator") -> None:
+        super().__init__()
+        self.name = name
+
+    def integrate(self, context: Context):
+        """Perform a dummy integration step."""
+
+
+class DummyMove(BaseMove[BaseOperation, Context]):
+    """A dummy move that applies a dummy operation."""
+
+    def __init__(
+        self, operation: BaseOperation, apply_constraints: bool = True
+    ) -> None:
+        super().__init__(operation, apply_constraints)
+
+    def check_move(self, context) -> bool:
+        return True
+
+    @property
+    def default_operation(self) -> DummyOperation:
+        return DummyOperation()
+
+    def __call__(self, context):
+        """
+        Apply the move to the context.
+
+        Parameters
+        ----------
+        context : Context
+            The context in which the move is applied.
+        """
+        self.operation.calculate(context)
+        return True
+
+
+class DummyContext(Context):
+    """A dummy context that mimics the Context class."""
+
+    def __init__(self) -> None:
+        super().__init__(Atoms(), default_rng())
+
+
+class DummyCalculator:
+    """A dummy calculator that returns a fixed potential energy."""
+
+    def __init__(self, dummy_value: float = -1.0) -> None:
+        self.dummy_value = dummy_value
+        self.results = {}
+
+    def get_potential_energy(self, *args, **kwargs) -> float:
         self.results["energy"] = self.dummy_value
         return self.dummy_value
 
 
 class DummyCriteria(BaseCriteria):
+    """A dummy criteria that always returns True."""
 
     @staticmethod
     def evaluate(context) -> bool:
@@ -92,6 +148,8 @@ class DummyCriteria(BaseCriteria):
 
 
 class DummySimulation:
+    """A dummy simulation class to mimic a Monte Carlo simulation."""
+
     def __init__(self, atoms, context, moves) -> None:
         self.atoms = atoms
         self.context = context
@@ -99,11 +157,11 @@ class DummySimulation:
 
 
 class DummyStream:
+    """A dummy stream class that does nothing on read or write."""
+
     def __init__(self, *args, **kwargs):
         self.closed = False
 
-    def read(self, *args, **kwargs):
-        pass
+    def read(self, *args, **kwargs): ...
 
-    def write(self, *args, **kwargs):
-        pass
+    def write(self, *args, **kwargs): ...

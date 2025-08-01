@@ -13,6 +13,7 @@ if TYPE_CHECKING:
         DeformationContext,
         DisplacementContext,
         ExchangeContext,
+        HamiltonianDisplacementContext,
     )
 
 
@@ -97,7 +98,40 @@ class CanonicalCriteria(BaseCriteria):
         bool
             True if the move is accepted, False otherwise.
         """
-        energy_difference = context.atoms.get_potential_energy() - context.last_energy
+        energy_difference = (
+            context.atoms.get_potential_energy() - context.last_potential_energy
+        )
+
+        return context.rng.random() < math.exp(
+            -energy_difference / (context.temperature * kB)
+        )
+
+
+class HamiltonianCanonicalCriteria(BaseCriteria):
+    """
+    Acceptance criteria for hybrid Monte Carlo simulation in the canonical (NVT) ensemble.
+    """
+
+    @staticmethod
+    def evaluate(context: HamiltonianDisplacementContext) -> bool:
+        """
+        Evaluate the acceptance criteria.
+
+        Parameters
+        ----------
+        context : HMCDisplacementContext
+            The context of the Monte Carlo simulation.
+
+        Returns
+        -------
+        bool
+            True if the move is accepted, False otherwise.
+        """
+        energy_difference = (
+            context.atoms.get_total_energy()
+            - context.last_potential_energy
+            - context.last_kinetic_energy
+        )
 
         return context.rng.random() < math.exp(
             -energy_difference / (context.temperature * kB)
@@ -126,7 +160,7 @@ class IsobaricCriteria(BaseCriteria):
         """
         atoms = context.atoms
         temperature = context.temperature * kB
-        energy_difference = atoms.get_potential_energy() - context.last_energy
+        energy_difference = atoms.get_potential_energy() - context.last_potential_energy
 
         current_volume = atoms.get_volume()
         old_volume = context.last_cell.volume
@@ -157,7 +191,9 @@ class GrandCanonicalCriteria(BaseCriteria):
         bool
             True if the move is accepted, False otherwise.
         """
-        energy_difference = context.atoms.get_potential_energy() - context.last_energy
+        energy_difference = (
+            context.atoms.get_potential_energy() - context.last_potential_energy
+        )
 
         number_of_exchange_particles = context.number_of_exchange_particles
         mass = context.exchange_atoms.get_masses().sum()

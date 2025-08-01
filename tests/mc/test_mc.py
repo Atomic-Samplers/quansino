@@ -253,6 +253,9 @@ def test_mc_logger(bulk_small, tmp_path):
         assert observer.interval == i
         assert observer.file.closed
 
+        mc.detach_observer(f"logger_{i}")
+        assert f"logger_{i}" not in mc.observers
+
 
 def test_mc_serialization_deserialization(bulk_small):
     """Test the serialization and deserialization of the `MonteCarlo` class."""
@@ -272,8 +275,8 @@ def test_mc_serialization_deserialization(bulk_small):
             "max_cycles": 1,
             "logging_mode": "a",
         },
-        "context": {},
-        "attributes": {"step_count": 1234, "last_results": {}},
+        "context": {"last_results": {}},
+        "attributes": {"step_count": 1234},
         "rng_state": mc._rng.bit_generator.state,
         "moves": {},
     }

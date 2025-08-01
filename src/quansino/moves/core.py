@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Any, Self, TypeVar, overload
 
 from quansino.mc.contexts import Context
 from quansino.moves.composite import CompositeMove
-from quansino.protocols import Operation
+from quansino.protocols import Integrator, Operation
 from quansino.registry import get_typed_class
 
 if TYPE_CHECKING:
@@ -21,7 +21,7 @@ if TYPE_CHECKING:
 T = TypeVar("T", bound="BaseMove")
 
 
-class BaseMove[OperationType: Operation, ContextType: Context]:
+class BaseMove[OperationType: Operation | Integrator, ContextType: Context]:
     """
     Base class to build Monte Carlo moves. This is a generic base class for all Monte Carlo moves, parameterized by the operation type and context type it works with.
 
@@ -73,7 +73,6 @@ class BaseMove[OperationType: Operation, ContextType: Context]:
         ]
 
         self.max_attempts = 10000
-
         self.check_move: Callable[..., bool] = lambda *_args, **_kwargs: True
 
     def __call__(self, context: ContextType) -> bool:
@@ -85,8 +84,9 @@ class BaseMove[OperationType: Operation, ContextType: Context]:
         bool
             Whether the move was accepted.
         """
-        self.operation.calculate(context)
-        return True
+        raise NotImplementedError(
+            f"{self.__class__.__name__} does not implement the __call__ method."
+        )
 
     def on_atoms_changed(
         self, added_indices: IntegerArray, removed_indices: IntegerArray
@@ -188,7 +188,7 @@ class BaseMove[OperationType: Operation, ContextType: Context]:
     @overload
     def __add__(self, other: Move) -> CompositeMove[Move]: ...
 
-    def __add__(self, other) -> CompositeMove:
+    def __add__(self, other):
         """
         Add two moves together to create a `CompositeMove`.
 

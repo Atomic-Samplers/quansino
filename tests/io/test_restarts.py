@@ -46,7 +46,7 @@ def test_restart_observer(bulk_small, tmp_path):
     assert data["atoms"] == bulk_small
     assert data["context"]["pressure"] == 1.0
     assert data["context"]["temperature"] == 300.0
-    assert data["context"]["last_energy"] == mc.context.last_energy
+    assert data["context"]["last_potential_energy"] == mc.context.last_potential_energy
     assert data["attributes"]["step_count"] == 10
 
     data_fixed: dict = read_json(Path(tmp_path, "restart_test_fixed.json"))
