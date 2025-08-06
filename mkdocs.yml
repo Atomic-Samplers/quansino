@@ -9,6 +9,7 @@ nav:
   - Documentation:
       - documentation/overview.md
       - documentation/examples.md
+      - documentation/logging.md
   - Code Documentation: reference/
   - About:
       - about/changelog.md

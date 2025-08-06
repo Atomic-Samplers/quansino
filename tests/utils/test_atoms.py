@@ -30,6 +30,7 @@ def test_has_constraint(bulk_large):
 
 
 def test_search_molecules(bulk_large, rng):
+    """Test the `search_molecules` function."""
     bulk_large.rattle(0.1)
     molecules = search_molecules(bulk_large, 2.9, required_size=0)
 
@@ -48,7 +49,7 @@ def test_search_molecules(bulk_large, rng):
 
     choices = ["H2", "H2O", "CH4"]
 
-    counts = {choice: 0 for choice in choices}
+    counts = dict.fromkeys(choices, 0)
 
     X, Y, Z = np.meshgrid(
         np.arange(0, 100, 10), np.arange(0, 100, 10), np.arange(0, 100, 10)
@@ -93,6 +94,7 @@ def test_search_molecules(bulk_large, rng):
 
 
 def test_reinsert_atoms(bulk_small, rng):
+    """Test the `reinsert_atoms` function."""
     other_bulk_atoms = bulk_small.copy()
 
     other_bulk_atoms.set_initial_charges(rng.random(len(other_bulk_atoms)))
