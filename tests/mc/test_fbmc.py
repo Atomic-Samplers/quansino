@@ -62,7 +62,7 @@ def test_force_bias_mass_setter(bulk_small, tmp_path):
     assert_allclose(fbmc.masses_scaling_power, random)
 
     with pytest.raises(ValueError):
-        fbmc.masses_scaling_power = [0.5, 0.5]
+        fbmc.masses_scaling_power = [0.5, 0.5]  # type: ignore[test-type]
 
 
 def test_fbmc_restart(bulk_small, tmp_path):
@@ -114,5 +114,7 @@ def test_constraints(bulk_small, tmp_path):
 
 def test_warning(bulk_small):
     """Test COM warning in `ForceBias`."""
-    with pytest.warns(UserWarning):
+    with pytest.warns(
+        UserWarning, match="can lead to sustained drift of the center of mass."
+    ):
         ForceBias(bulk_small, delta=0.01, seed=42, temperature=5000, logfile=None)

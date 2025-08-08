@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, ClassVar, Final
 from warnings import warn
 
 import numpy as np
@@ -315,6 +315,9 @@ class AdaptiveForceBias(ForceBias):
         Additional keyword arguments to pass to the ForceBias superclass.
     """
 
+    energies_variance_keyword: ClassVar[str] = "energies"
+    forces_variance_keyword: ClassVar[str] = "forces_comm"
+
     def __init__(
         self,
         atoms: Atoms,
@@ -340,20 +343,20 @@ class AdaptiveForceBias(ForceBias):
         self.update_functions = {"tanh": self.tanh_update, "exp": self.exp_update}
         self.update_function = update_function
 
-        super().__init__(atoms, 0, temperature, **mc_kwargs)
+        super().__init__(
+            atoms, (self.min_delta + self.max_delta) / 2, temperature, **mc_kwargs
+        )
 
         if self.default_logger:
             if self.scheme == "forces":
                 self.default_logger.add_field(
-                    "MeanDelta",
-                    lambda: np.mean(self.cache_delta),
-                    str_format="{:>16.2f}",
+                    "MeanDelta", lambda: np.mean(self.delta), str_format="{:>16.2f}"
                 )
                 self.default_logger.add_field(
-                    "MinDelta", lambda: np.min(self.cache_delta), str_format="{:>16.2f}"
+                    "MinDelta", lambda: np.min(self.delta), str_format="{:>16.2f}"
                 )
                 self.default_logger.add_field(
-                    "MaxDelta", lambda: np.max(self.cache_delta), str_format="{:>16.2f}"
+                    "MaxDelta", lambda: np.max(self.delta), str_format="{:>16.2f}"
                 )
                 self.default_logger.add_field(
                     "MeanForcesVar",
@@ -362,39 +365,22 @@ class AdaptiveForceBias(ForceBias):
                 )
             elif self.scheme == "energy":
                 self.default_logger.add_field(
-                    "Delta", lambda: self.cache_delta, str_format="{:>16.2f}"
+                    "Delta", lambda: self.delta, str_format="{:>16.2f}"
                 )
                 self.default_logger.add_field(
                     "EnergyVar", lambda: self.variation_coef, str_format="{:>16.6f}"
                 )
 
-    @property
-    def delta(self) -> float:
+    def update_delta(self) -> None:
         """
-        Calculate the adaptive delta parameter based on the variation coefficient.
-
-        Returns
-        -------
-        float
-            The adaptive delta parameter.
+        Update the delta parameter based on the current variation coefficient.
+        This method is called automatically during the step process.
         """
-        self.variation_coef = self.get_variation_coef(self.atoms)
+        self.variation_coef = self.schemes[self.scheme](self.atoms)
 
-        self.cache_delta = self.min_delta + (
+        self.delta = self.min_delta + (
             self.max_delta - self.min_delta
         ) * self.update_functions[self.update_function](self.variation_coef)
-        return self.cache_delta
-
-    @delta.setter
-    def delta(self, value: float):
-        """
-        Setter for the delta property. This is a no-op as delta is calculated dynamically. Only here for compatbility with the superclass.
-
-        Parameters
-        ----------
-        value: float
-            The value to set (ignored).
-        """
 
     def get_forces_variation_coef(self, atoms: Atoms) -> NDArray:
         """
@@ -411,7 +397,7 @@ class AdaptiveForceBias(ForceBias):
             The variation coefficient for the forces.
         """
         try:
-            forces_committee = atoms.calc.results["forces_comm"]  # type: ignore[try-attr]
+            forces_committee = atoms.calc.results[self.forces_variance_keyword]  # type: ignore[try-attr]
             return np.std(forces_committee, axis=0) / np.mean(
                 np.abs(forces_committee), axis=0
             )
@@ -437,7 +423,7 @@ class AdaptiveForceBias(ForceBias):
             The variation coefficient for the energies.
         """
         try:
-            energies_committee = atoms.calc.results["energies"]  # type: ignore
+            energies_committee = atoms.calc.results[self.energies_variance_keyword]  # type: ignore[try-attr]
             return np.std(energies_committee, axis=0) / len(self.atoms)
         except (KeyError, AttributeError):
             warn(
@@ -446,7 +432,9 @@ class AdaptiveForceBias(ForceBias):
             )
             return self.reference_variance
 
-    def tanh_update(self, variation_coefficient: float | NDArray) -> float | NDArray:
+    def tanh_update(
+        self, variation_coefficient: float | NDArray
+    ) -> float | NDArray[np.floating]:
         """
         Update function using the hyperbolic tangent (tanh) function.
 
@@ -457,14 +445,14 @@ class AdaptiveForceBias(ForceBias):
 
         Returns
         -------
-        float | NDArray
-            The updated value.
+        float | NDArray[np.floating]
+            The updated value based on the tanh function.
         """
         return 1 - np.tanh(
             variation_coefficient / self.reference_variance * math.atanh(0.5)
         )
 
-    def exp_update(self, variation_coefficient: float) -> float:
+    def exp_update(self, variation_coefficient: float) -> float | NDArray[np.floating]:
         """
         Update function using the exponential function.
 
@@ -475,61 +463,19 @@ class AdaptiveForceBias(ForceBias):
 
         Returns
         -------
-        float
-            The updated value.
+        float | NDArray[np.floating]
+            The updated value based on the exponential function.
         """
         return np.exp(-variation_coefficient / self.reference_variance * math.log(2))
 
-    @property
-    def scheme(self) -> str:
+    def step(self) -> Forces:
         """
-        Get the current scheme for variation coefficient calculation.
+        Perform one Adaptive Force Bias Monte Carlo step.
 
         Returns
         -------
-        str
-            The current scheme.
+        Forces
+            The forces acting on the atoms after the Monte Carlo step.
         """
-        return self._scheme
-
-    @scheme.setter
-    def scheme(self, value: str):
-        """
-        Set the scheme for variation coefficient calculation.
-
-        Parameters
-        ----------
-        value: str
-            The scheme to set.
-        """
-        self._scheme = value
-        self.get_variation_coef = self.schemes[value]
-
-    @property
-    def update_function(self) -> str:
-        """
-        Get the current update function for delta parameter adjustment.
-
-        Returns
-        -------
-        str
-            The current update function.
-        """
-        return self._update_function
-
-    @update_function.setter
-    def update_function(self, value: str):
-        """
-        Set the update function for delta parameter adjustment.
-
-        Parameters
-        ----------
-        value: str
-            The update function to set.
-        """
-        if value not in self.update_functions:
-            raise ValueError(
-                f"Invalid update function {value}, available functions: {self.update_functions}"
-            )
-
-        self._update_function = value
+        self.update_delta()
+        return super().step()
