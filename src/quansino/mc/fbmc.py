@@ -425,12 +425,14 @@ class AdaptiveForceBias(ForceBias):
         """
         try:
             energies_committee = atoms.calc.results[self.energies_variance_keyword]  # type: ignore[try-attr]
+
             return np.std(energies_committee, axis=0) / len(atoms)
         except (KeyError, AttributeError):
             warn(
                 "No committee energies available, using default reference variance.",
                 stacklevel=2,
             )
+
             return self.reference_variance
 
     def tanh_update(
