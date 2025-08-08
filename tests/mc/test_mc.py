@@ -10,11 +10,14 @@ from quansino.io.logger import Logger
 from quansino.mc.contexts import DisplacementContext
 from quansino.mc.core import MonteCarlo
 from quansino.mc.criteria import BaseCriteria
+from quansino.moves import moves_registry
 from quansino.moves.core import BaseMove, CompositeMove
 from quansino.moves.displacement import DisplacementMove
 from quansino.moves.exchange import ExchangeMove
+from quansino.operations import operations_registry
 from quansino.operations.cell import DeformationOperation
 from quansino.operations.displacement import DisplacementOperation
+from quansino.registry import register
 
 
 def test_mc_class(bulk_small):
@@ -38,14 +41,18 @@ def test_mc_class(bulk_small):
     with pytest.raises(AttributeError):
         mc.validate_simulation()
 
-    with pytest.warns(UserWarning):
+    with pytest.warns(
+        UserWarning, match="Atoms object does not have calculator attached"
+    ):
         mc.save_state()
 
     mc.atoms.calc = None
     with pytest.raises(AttributeError):
         mc.validate_simulation()
 
-    with pytest.warns(UserWarning):
+    with pytest.warns(
+        UserWarning, match="Atoms object does not have calculator attached"
+    ):
         mc.revert_state()
 
     mc.step_count = -1
@@ -145,7 +152,7 @@ def test_mc_yield_moves(bulk_small):
 
 def test_mc_logger(bulk_small, tmp_path):
     """Test the `Logger` class and its integration with `MonteCarlo`."""
-    import sys
+    import sys  # noqa: PLC0415
 
     mc = MonteCarlo(bulk_small, seed=42, logfile=sys.stdout, logging_interval=1)
 
@@ -286,10 +293,6 @@ def test_mc_serialization_deserialization(bulk_small):
     new_dictionary = reconstructed_mc.to_dict()
 
     assert dictionary == new_dictionary
-
-    from quansino.moves import moves_registry
-    from quansino.operations import operations_registry
-    from quansino.registry import register
 
     @register()
     class DummyCriteria(BaseCriteria):
