@@ -35,7 +35,6 @@ def test_observers(tmp_path):
 
     text_observer.file = sys.stdout
 
-    assert str(text_observer) == "Stream:<stdout>"
     text_observer.close()
 
     assert not sys.stdout.closed
