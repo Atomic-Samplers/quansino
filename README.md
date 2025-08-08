@@ -20,7 +20,7 @@
 
 ## Key Features 🎰
 
-- Perform simulations in various ensemble; (grand-canonical) canonical, isobaric, more will be added in the future.
+- Perform simulations in various ensemble; (grand-)canonical, isobaric, more will be added in the future.
 - The framework allows to design custom simulation algorithms by providing explicit interfaces for each step of the simulation, such as:
 
   - **Moves**: Moves are the core of the simulation, allowing for the modification of atomic configurations. The framework supports a wide range of move types, including:
