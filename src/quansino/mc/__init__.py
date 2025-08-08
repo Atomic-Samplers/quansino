@@ -21,12 +21,13 @@ from quansino.mc.criteria import (
     IsobaricCriteria,
 )
 from quansino.mc.driver import Driver
-from quansino.mc.fbmc import ForceBias
+from quansino.mc.fbmc import AdaptiveForceBias, ForceBias
 from quansino.mc.gcmc import GrandCanonical
 from quansino.mc.isobaric import Isobaric
 from quansino.registry import register_class
 
 __all__ = [
+    "AdaptiveForceBias",
     "BaseCriteria",
     "Canonical",
     "CanonicalCriteria",
@@ -48,6 +49,12 @@ __all__ = [
 ]
 
 mc_registry = {
+    "AdaptiveForceBias": AdaptiveForceBias,
+    "Driver": Driver,
+    "HamiltonianContext": HamiltonianContext,
+    "HamiltonianDeformationContext": HamiltonianDeformationContext,
+    "HamiltonianDisplacementContext": HamiltonianDisplacementContext,
+    "HamiltonianExchangeContext": HamiltonianExchangeContext,
     "BaseCriteria": BaseCriteria,
     "Canonical": Canonical,
     "CanonicalCriteria": CanonicalCriteria,

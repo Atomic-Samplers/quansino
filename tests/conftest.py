@@ -14,6 +14,7 @@ from numpy.random import default_rng
 from quansino.integrators.core import BaseIntegrator
 from quansino.mc.contexts import Context
 from quansino.mc.criteria import BaseCriteria
+from quansino.mc.fbmc import AdaptiveForceBias
 from quansino.moves.core import BaseMove
 from quansino.operations.core import BaseOperation
 
@@ -137,6 +138,26 @@ class DummyCalculator:
     def get_potential_energy(self, *args, **kwargs) -> float:
         self.results["energy"] = self.dummy_value
         return self.dummy_value
+
+
+class EMTUncertaintyReadyCalculator(EMT):
+    """A dummy calculator that returns a fixed potential energy with uncertainties."""
+
+    def __init__(self, len_atoms: int, **kwargs) -> None:
+        self.len_atoms = len_atoms
+        super().__init__(**kwargs)
+
+    def get_property(self, *args, **kwargs):
+        result = super().get_property(*args, **kwargs)
+
+        self.results[AdaptiveForceBias.energies_variance_keyword] = (
+            default_rng().random((5,)) * 0.1
+        )
+        self.results[AdaptiveForceBias.forces_variance_keyword] = (
+            default_rng().random((5, self.len_atoms, 3)) * 0.1
+        )
+
+        return result
 
 
 class DummyCriteria(BaseCriteria):

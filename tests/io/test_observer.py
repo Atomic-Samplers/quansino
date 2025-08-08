@@ -30,7 +30,11 @@ def test_observers(tmp_path):
 
     assert text_observer.file.closed
 
+    with pytest.raises(ValueError, match="Impossible to link a closed file for"):
+        text_observer.file = text_observer.file
+
     text_observer.file = sys.stdout
+
     text_observer.close()
 
     assert not sys.stdout.closed
@@ -46,9 +50,12 @@ def test_observers(tmp_path):
     with pytest.raises(ValueError):
         text_observer = TextObserver(file=DummyStream(), interval=1)  # type: ignore
 
+    with open(tmp_path / "test.txt", "w") as f:
+        text_observer = TextObserver(file=f, interval=1)  # type: ignore
+
     TextObserver.accept_stream = True
 
-    assert not text_observer.file.closed
+    assert text_observer.file.closed
 
     assert text_observer.to_dict() == {
         "name": "TextObserver",

@@ -45,7 +45,6 @@ class Observer:
         **kwargs : Any
             Keyword arguments passed to the observer.
         """
-        ...
 
     @abstractmethod
     def attach_simulation(self, *args: Any, **kwargs: Any) -> None:
@@ -59,7 +58,6 @@ class Observer:
         **kwargs : Any
             Keyword arguments passed to the observer.
         """
-        ...
 
     def to_dict(self) -> dict[str, Any]:
         """
