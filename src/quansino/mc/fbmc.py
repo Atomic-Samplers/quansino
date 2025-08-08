@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, ClassVar, Final
+from typing import TYPE_CHECKING, ClassVar, Final, Literal
 from warnings import warn
 
 import numpy as np
@@ -324,7 +324,7 @@ class AdaptiveForceBias(ForceBias):
         min_delta: float,
         max_delta: float,
         temperature: float = 298.15,
-        scheme: str = "forces",
+        scheme: Literal["forces", "energy"] = "forces",
         reference_variance: float = 0.1,
         update_function: str = "tanh",
         **mc_kwargs,
@@ -342,6 +342,8 @@ class AdaptiveForceBias(ForceBias):
 
         self.update_functions = {"tanh": self.tanh_update, "exp": self.exp_update}
         self.update_function = update_function
+
+        self.variation_coef: NDArray[np.floating] | float = 0.0
 
         super().__init__(
             atoms, (self.min_delta + self.max_delta) / 2, temperature, **mc_kwargs
@@ -373,8 +375,7 @@ class AdaptiveForceBias(ForceBias):
 
     def update_delta(self) -> None:
         """
-        Update the delta parameter based on the current variation coefficient.
-        This method is called automatically during the step process.
+        Update the delta parameter based on the current variation coefficient. This method is called automatically during the step process.
         """
         self.variation_coef = self.schemes[self.scheme](self.atoms)
 
@@ -424,7 +425,7 @@ class AdaptiveForceBias(ForceBias):
         """
         try:
             energies_committee = atoms.calc.results[self.energies_variance_keyword]  # type: ignore[try-attr]
-            return np.std(energies_committee, axis=0) / len(self.atoms)
+            return np.std(energies_committee, axis=0) / len(atoms)
         except (KeyError, AttributeError):
             warn(
                 "No committee energies available, using default reference variance.",
