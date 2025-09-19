@@ -24,7 +24,7 @@ classifiers = [
     "Operating System :: Unix",
     "Operating System :: MacOS",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = ["numpy>=1.19.5", "ase>=3.24.0", "networkx>=3.4.2"]
 
 [project.optional-dependencies]
