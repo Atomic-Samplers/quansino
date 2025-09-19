@@ -1,12 +1,24 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Protocol, Self, runtime_checkable
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Generic,
+    Protocol,
+    Self,
+    TypeVar,
+    runtime_checkable,
+)
 
 if TYPE_CHECKING:
     from ase.cell import Cell
 
     from quansino.mc.contexts import Context
     from quansino.type_hints import IntegerArray
+
+ContextType = TypeVar(  # NOQA: PLC0105
+    "ContextType", bound="Context", contravariant=True
+)
 
 
 @runtime_checkable
@@ -45,7 +57,7 @@ class Serializable(Protocol):
 
 
 @runtime_checkable
-class Criteria[ContextType: Context](Serializable, Protocol):
+class Criteria(Serializable, Protocol, Generic[ContextType]):
     """
     Base protocol for all criteria in [`MonteCarlo`][quansino.mc.core.MonteCarlo] simulations. Criteria are used to evaluate whether a move is acceptable based on the current state of the system. Criteria classes should implement the [`evaluate`][quansino.protocols.Criteria.evaluate] method to perform the evaluation and return a boolean indicating whether the criteria are met. Such method take a simulation [`Context`][quansino.mc.contexts.Context] as parameter, which provides the necessary information about the current state of the system, such as atom positions, cell parameters, as well as any additional information needed to perform the evaluation.
     """
@@ -68,7 +80,7 @@ class Criteria[ContextType: Context](Serializable, Protocol):
 
 
 @runtime_checkable
-class Move[ContextType: Context](Serializable, Protocol):
+class Move(Serializable, Protocol, Generic[ContextType]):
     """
     Base protocol for all acceptable moves in [`MonteCarlo`][quansino.mc.core.MonteCarlo] simulations. Moves perform specific tasks such as displacing atoms, deforming cells, or exchanging atoms. Move classes should implement the [`__call__`][quansino.protocols.Move.__call__] method to perform the move and return whether it was successful. Such method take a simulation [`Context`][quansino.mc.contexts.Context] as parameter, which provides the necessary information about the current state of the system, such as atom positions, cell parameters, as well as any additional information needed to perform the move.
     """
@@ -112,7 +124,7 @@ class Move[ContextType: Context](Serializable, Protocol):
 
 
 @runtime_checkable
-class Operation[ContextType: Context](Serializable, Protocol):
+class Operation(Serializable, Protocol, Generic[ContextType]):
     """
     Base protocol for all operations in [`MonteCarlo`][quansino.mc.core.MonteCarlo] simulations. Operations are used by [`Move`][quansino.protocols.Move] to calculate various operations, such as calculating displacements or deformation tensors. Operation classes should implement the [`calculate`][quansino.protocols.Operation.calculate] method to perform the operation and return the result. Such method take a simulation [`Context`][quansino.mc.contexts.Context] as parameter, which provides the necessary information about the current state of the system, such as atom positions, cell parameters, as well as any additional information needed to perform the operation.
     """
@@ -135,7 +147,7 @@ class Operation[ContextType: Context](Serializable, Protocol):
 
 
 @runtime_checkable
-class Integrator[ContextType: Context](Serializable, Protocol):
+class Integrator(Serializable, Protocol, Generic[ContextType]):
     """
     Base protocol for all integrators in [`MonteCarlo`][quansino.mc.core.MonteCarlo] simulations. Integrators are used to update the state of the system **in place** based on the current context and the operations performed. Integrator classes should implement the [`integrate`][quansino.protocols.Integrator.integrate] method to perform the integration step. Such method take a simulation [`Context`][quansino.mc.contexts.Context] as parameter, which provides the necessary information about the current state of the system, such as atom positions, cell parameters, as well as any additional information needed to perform the integration.
     """

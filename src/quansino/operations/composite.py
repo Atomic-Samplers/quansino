@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Self, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar, cast, overload
 from warnings import warn
 
 import numpy as np
@@ -14,9 +14,10 @@ if TYPE_CHECKING:
 
 
 T = TypeVar("T", bound="Operation")
+OperationType = TypeVar("OperationType", bound="Operation")
 
 
-class CompositeOperation[OperationType: Operation]:
+class CompositeOperation(Generic[OperationType]):
     """
     Class to combine multiple operations into a single operation.
 

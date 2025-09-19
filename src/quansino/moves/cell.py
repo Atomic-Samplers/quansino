@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generic, TypeVar
 
-from quansino.mc.contexts import DeformationContext
 from quansino.moves.composite import CompositeMove
 from quansino.moves.core import BaseMove
 from quansino.operations.cell import IsotropicDeformation
 
 if TYPE_CHECKING:
+    from quansino.mc.contexts import DeformationContext
     from quansino.operations.core import Operation
 
+O = TypeVar("O", bound="Operation")  # NOQA: E741
+DC = TypeVar("DC", bound="DeformationContext")
 
-class CellMove[OperationType: Operation, ContextType: DeformationContext](
-    BaseMove[OperationType, ContextType]
-):
+
+class CellMove(BaseMove[O, DC], Generic[O, DC]):
     """
     Class for cell moves that change the size and shape of the unit cell.
 
@@ -40,7 +41,7 @@ class CellMove[OperationType: Operation, ContextType: DeformationContext](
 
     def __init__(
         self,
-        operation: OperationType | None = None,
+        operation: O | None = None,
         scale_atoms: bool = True,
         apply_constraints: bool = True,
     ) -> None:
@@ -49,9 +50,9 @@ class CellMove[OperationType: Operation, ContextType: DeformationContext](
 
         self.scale_atoms = scale_atoms
 
-        self.composite_move_type = CompositeMove[CellMove[OperationType, ContextType]]
+        self.composite_move_type = CompositeMove[CellMove[O, DC]]
 
-    def attempt_deformation(self, context: ContextType) -> bool:
+    def attempt_deformation(self, context: DC) -> bool:
         """
         Attempt to move the atoms using the provided operation and check. The move is attempted `max_attempts` number of times. If the move is successful, return True, otherwise, return False.
 
@@ -88,7 +89,7 @@ class CellMove[OperationType: Operation, ContextType: DeformationContext](
 
         return False
 
-    def __call__(self, context: ContextType) -> bool:
+    def __call__(self, context: DC) -> bool:
         """
         Perform the cell move.
 

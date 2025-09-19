@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Self, overload
+from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar, overload
 
 from quansino.protocols import Move
 from quansino.registry import get_typed_class
@@ -16,8 +16,10 @@ if TYPE_CHECKING:
     from quansino.mc.contexts import Context
     from quansino.type_hints import IntegerArray
 
+MoveType = TypeVar("MoveType", bound="Move")
 
-class CompositeMove[MoveType: Move]:
+
+class CompositeMove(Generic[MoveType]):
     """
     Class to perform a composite move operation. This class is returned when adding or multiplying `Move` objects together.
 
@@ -133,7 +135,7 @@ class CompositeMove[MoveType: Move]:
         for move in self.moves:
             move.on_cell_changed(new_cell)
 
-    def __mul__(self, n: int) -> Self:
+    def __mul__(self, n: int) -> CompositeMove[MoveType]:
         """
         Multiply the move by an integer to create a `CompositeMove` with repeated moves.
 

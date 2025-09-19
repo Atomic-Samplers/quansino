@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Self, TypeVar, overload
+from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar, overload
 
-from quansino.mc.contexts import Context
 from quansino.moves.composite import CompositeMove
 from quansino.protocols import Integrator, Operation
 from quansino.registry import get_typed_class
@@ -15,13 +14,16 @@ if TYPE_CHECKING:
 
     from ase.cell import Cell
 
+    from quansino.mc.contexts import Context
     from quansino.protocols import Move
     from quansino.type_hints import IntegerArray
 
 T = TypeVar("T", bound="BaseMove")
+ContextType = TypeVar("ContextType", bound="Context")
+OperationType = TypeVar("OperationType", bound="Operation | Integrator")
 
 
-class BaseMove[OperationType: Operation | Integrator, ContextType: Context]:
+class BaseMove(Generic[OperationType, ContextType]):
     """
     Base class to build Monte Carlo moves. This is a generic base class for all Monte Carlo moves, parameterized by the operation type and context type it works with.
 
@@ -217,7 +219,7 @@ class BaseMove[OperationType: Operation | Integrator, ContextType: Context]:
             f"Cannot add {self.__class__.__name__} to {other.__class__.__name__}"
         )
 
-    def __mul__(self, n: int) -> CompositeMove[Self]:
+    def __mul__(self, n: int) -> CompositeMove[BaseMove]:
         """
         Multiply the move by an integer to create a `CompositeMove` with repeated moves.
 
@@ -240,7 +242,7 @@ class BaseMove[OperationType: Operation | Integrator, ContextType: Context]:
 
     __rmul__ = __mul__
 
-    def __copy__(self) -> Self:
+    def __copy__(self) -> BaseMove:
         """
         Create a shallow copy of the move.
 

@@ -7,7 +7,7 @@ from ase.units import fs
 from quansino.integrators.core import BaseIntegrator
 
 if TYPE_CHECKING:
-    from quansino.mc.contexts import HamiltonianDisplacementContext
+    from quansino.mc.contexts import DisplacementContext
 
 
 class Verlet(BaseIntegrator):
@@ -49,7 +49,7 @@ class Verlet(BaseIntegrator):
         self.max_steps = max_steps
         self.apply_constraints = apply_constraints
 
-    def integrate(self, context: HamiltonianDisplacementContext) -> None:
+    def integrate(self, context: DisplacementContext) -> None:
         """
         Perform a single step of the Velocity Verlet integration.
 
