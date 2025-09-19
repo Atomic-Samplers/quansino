@@ -180,7 +180,7 @@ def test_mc_logger(bulk_small, tmp_path):
     assert mc.default_logger is not None
     assert Path(tmp_path, "mc.log").exists()
     assert mc.default_logger.file.name == str(tmp_path / "mc.log")
-    assert str(mc.default_logger) == f"Path:{tmp_path / "mc.log"!s}"
+    assert str(mc.default_logger) == f"Path:{tmp_path / 'mc.log'!s}"
     assert mc.default_logger.file.mode == "a"
     assert mc.logging_interval == 10
 

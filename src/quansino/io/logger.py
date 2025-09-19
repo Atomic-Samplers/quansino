@@ -240,8 +240,8 @@ class Logger(TextObserver):
             lambda: simulation.__class__.__name__,
             lambda: simulation.nsteps,
             lambda: "{:02d}:{:02d}:{:02d}".format(*time.localtime()[3:6]),
-            simulation.optimizable.get_potential_energy,
-            lambda: np.linalg.norm(simulation.optimizable.get_forces(), axis=1).max(),
+            simulation.atoms.get_potential_energy,
+            lambda: np.linalg.norm(simulation.atoms.get_forces(), axis=1).max(),
         ]
         str_formats = ["{:<24s}"] + ["{:>4d}"] + ["{:>12s}"] + ["{:>12.4f}"] * 2
 

@@ -2,24 +2,27 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 import numpy as np
 
-from quansino.mc.contexts import ExchangeContext
 from quansino.moves.composite import CompositeMove
 from quansino.moves.displacement import DisplacementMove
 from quansino.operations.displacement import Translation
-from quansino.protocols import Operation
 
 if TYPE_CHECKING:
     from ase.atoms import Atoms
 
+    from quansino.mc.contexts import ExchangeContext
+    from quansino.protocols import Operation
     from quansino.type_hints import IntegerArray
 
+OperationType = TypeVar("OperationType", bound="Operation")
+ContextType = TypeVar("ContextType", bound="ExchangeContext")
 
-class ExchangeMove[OperationType: Operation, ContextType: ExchangeContext](
-    DisplacementMove[OperationType, ContextType]
+
+class ExchangeMove(
+    DisplacementMove[OperationType, ContextType], Generic[OperationType, ContextType]
 ):
     """
     Class for atomic/molecular exchange moves that exchanges atom(s). The class will either add `exchange_atoms` in the unit cell or delete a (group) of atom(s) present in `labels`.

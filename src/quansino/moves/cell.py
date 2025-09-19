@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generic, TypeVar
 
-from quansino.mc.contexts import DeformationContext
 from quansino.moves.composite import CompositeMove
 from quansino.moves.core import BaseMove
 from quansino.operations.cell import IsotropicDeformation
 
 if TYPE_CHECKING:
+    from quansino.mc.contexts import DeformationContext
     from quansino.operations.core import Operation
 
+OperationType = TypeVar("OperationType", bound="Operation")
+ContextType = TypeVar("ContextType", bound="DeformationContext")
 
-class CellMove[OperationType: Operation, ContextType: DeformationContext](
-    BaseMove[OperationType, ContextType]
+
+class CellMove(
+    BaseMove[OperationType, ContextType], Generic[OperationType, ContextType]
 ):
     """
     Class for cell moves that change the size and shape of the unit cell.

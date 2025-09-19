@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, ClassVar, Generic, TypeVar, cast
 from warnings import warn
 
 from quansino.mc.canonical import Canonical
@@ -10,18 +10,18 @@ from quansino.mc.contexts import ExchangeContext
 from quansino.mc.criteria import CanonicalCriteria, GrandCanonicalCriteria
 from quansino.moves.displacement import DisplacementMove
 from quansino.moves.exchange import ExchangeMove
-from quansino.protocols import Criteria
 
 if TYPE_CHECKING:
-
     from ase.atoms import Atoms
 
-    from quansino.protocols import Move
+    from quansino.protocols import Criteria, Move
 
 
-class GrandCanonical[MoveType: Move, CriteriaType: Criteria](
-    Canonical[MoveType, CriteriaType]
-):
+MoveType = TypeVar("MoveType", bound="Move")
+ContextType = TypeVar("ContextType", bound="Criteria")
+
+
+class GrandCanonical(Canonical[MoveType, ContextType], Generic[MoveType, ContextType]):
     """
     Grand Canonical (μVT) Monte Carlo object for performing simulations in the grand canonical ensemble. This class is a subclass of the [`Canonical`][quansino.mc.canonical.Canonical] class and provides additional functionality specific to grand canonical simulations. It uses the [`ExchangeContext`][quansino.mc.contexts.ExchangeContext] context by default.
 

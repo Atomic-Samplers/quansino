@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Generic, Self, TypeVar
 
 from quansino.protocols import Criteria, Move
 from quansino.registry import get_typed_class
@@ -12,9 +12,12 @@ from quansino.registry import get_typed_class
 if TYPE_CHECKING:
     from typing import Any
 
+MoveType = TypeVar("MoveType", bound="Move")
+CriteriaType = TypeVar("CriteriaType", bound="Criteria")
+
 
 @dataclass(slots=True)
-class MoveStorage[MoveType: Move, CriteriaType: Criteria]:
+class MoveStorage(Generic[MoveType, CriteriaType]):
     """
     Dataclass to store moves and their acceptance criteria.
 

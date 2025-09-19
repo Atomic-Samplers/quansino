@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, ClassVar, cast
+from typing import TYPE_CHECKING, Any, ClassVar, Generic, TypeVar, cast
 from warnings import warn
 
 import numpy as np
@@ -18,10 +18,11 @@ if TYPE_CHECKING:
 
     from quansino.protocols import Criteria, Move
 
+MoveType = TypeVar("MoveType", bound="Move")
+ContextType = TypeVar("ContextType", bound="Criteria")
 
-class Canonical[MoveType: Move, CriteriaType: Criteria](
-    MonteCarlo[MoveType, CriteriaType]
-):
+
+class Canonical(MonteCarlo[MoveType, ContextType], Generic[MoveType, ContextType]):
     """
     Canonical Monte Carlo simulation object for performing NVT simulations. This class is a subclass of the [`MonteCarlo`][quansino.mc.core.MonteCarlo] class and provides additional functionality specific to canonical simulations. By default, it uses the [`DisplacementContext`][quansino.mc.contexts.DisplacementContext] context.
 
@@ -148,8 +149,8 @@ class Canonical[MoveType: Move, CriteriaType: Criteria](
         return dictionary
 
 
-class HamiltonianCanonical[MoveType: Move, CriteriaType: Criteria](
-    Canonical[MoveType, CriteriaType]
+class HamiltonianCanonical(
+    Canonical[MoveType, ContextType], Generic[MoveType, ContextType]
 ):
     """
     Hamiltonian Canonical Monte Carlo simulation object for performing NVT simulations with Hamiltonian moves. This class is a subclass of the [`Canonical`][quansino.mc.canonical.Canonical] class and provides additional functionality specific to Hamiltonian canonical simulations. By default, it uses the [`HamiltonianDisplacementContext`][quansino.mc.contexts.HamiltonianDisplacementContext] context.

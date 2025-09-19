@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, ClassVar, cast
+from typing import TYPE_CHECKING, ClassVar, Generic, TypeVar, cast
 from warnings import warn
 
 from quansino.mc.canonical import Canonical
@@ -10,16 +10,18 @@ from quansino.mc.contexts import DeformationContext
 from quansino.mc.criteria import CanonicalCriteria, IsobaricCriteria
 from quansino.moves.cell import CellMove
 from quansino.moves.displacement import DisplacementMove
-from quansino.protocols import Criteria, Move
 
 if TYPE_CHECKING:
 
     from ase.atoms import Atoms
 
+    from quansino.protocols import Criteria, Move
 
-class Isobaric[MoveType: Move, CriteriaType: Criteria](
-    Canonical[MoveType, CriteriaType]
-):
+MoveType = TypeVar("MoveType", bound="Move")
+ContextType = TypeVar("ContextType", bound="Criteria")
+
+
+class Isobaric(Canonical[MoveType, ContextType], Generic[MoveType, ContextType]):
     """
     Isobaric (NPT) Monte Carlo simulation object for performing NPT simulations. This class is a subclass of the [`Canonical`][quansino.mc.canonical.Canonical] class and provides additional functionality specific to isobaric simulations. It uses the [`DeformationContext`][quansino.mc.contexts.DeformationContext] context by default.
 

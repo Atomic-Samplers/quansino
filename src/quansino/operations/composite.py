@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Self, TypeVar, cast, overload
+from typing import TYPE_CHECKING, Any, Generic, Self, TypeVar, cast, overload
 from warnings import warn
 
 import numpy as np
@@ -13,10 +13,10 @@ if TYPE_CHECKING:
     from quansino.mc.contexts import Context
 
 
-T = TypeVar("T", bound="Operation")
+OperationType = TypeVar("OperationType", bound="Operation")
 
 
-class CompositeOperation[OperationType: Operation]:
+class CompositeOperation(Generic[OperationType]):
     """
     Class to combine multiple operations into a single operation.
 
@@ -72,13 +72,17 @@ class CompositeOperation[OperationType: Operation]:
         return np.sum([op.calculate(context) for op in self.operations], axis=0)
 
     @overload
-    def __add__(self: T, other: CompositeOperation[T]) -> CompositeOperation[T]: ...
+    def __add__(
+        self: OperationType, other: CompositeOperation[OperationType]
+    ) -> CompositeOperation[OperationType]: ...
 
     @overload
     def __add__(self, other: CompositeOperation) -> CompositeOperation[Operation]: ...
 
     @overload
-    def __add__(self: T, other: T) -> CompositeOperation[T]: ...
+    def __add__(
+        self: OperationType, other: OperationType
+    ) -> CompositeOperation[OperationType]: ...
 
     @overload
     def __add__(self, other) -> CompositeOperation[Operation]: ...

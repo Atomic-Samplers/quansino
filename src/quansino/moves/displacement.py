@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Generic, Literal, TypeVar
 
 import numpy as np
 
@@ -23,9 +23,12 @@ if TYPE_CHECKING:
 
     from quansino.type_hints import IntegerArray
 
+OperationType = TypeVar("OperationType", bound=Operation)
+ContextType = TypeVar("ContextType", bound=DisplacementContext)
 
-class DisplacementMove[OperationType: Operation, ContextType: DisplacementContext](
-    BaseMove[OperationType, ContextType]
+
+class DisplacementMove(
+    BaseMove[OperationType, ContextType], Generic[OperationType, ContextType]
 ):
     """
     Class for displacement moves that displaces one atom or a group of atoms. The class will use an [`Operation`][quansino.operations.core.Operation]. The class uses the `labels` attribute to determine which atoms can be displaced, if none, the move fails. If multiple atoms share the same label, they are considered to be part of the same group (molecule) and will be displaced together in a consistent manner.
@@ -257,9 +260,13 @@ class DisplacementMove[OperationType: Operation, ContextType: DisplacementContex
         return dictionary
 
 
-class HamiltonianDisplacementMove[
-    OperationType: Integrator, ContextType: HamiltonianDisplacementContext
-](BaseMove[OperationType, ContextType]):
+IntegratorType = TypeVar("IntegratorType", bound=Integrator)
+HContextType = TypeVar("HContextType", bound=HamiltonianDisplacementContext)
+
+
+class HamiltonianDisplacementMove(
+    BaseMove[IntegratorType, HContextType], Generic[IntegratorType, HContextType]
+):
     """
     Class for Hamiltonian displacement moves that displaces atoms using a Hamiltonian integrator. The class uses the `distribution` attribute to sample momenta from a distribution before attempting the move. The class will use an [`Integrator`][quansino.integrators.core.Integrator] to perform the move.
 
@@ -278,16 +285,16 @@ class HamiltonianDisplacementMove[
         distribution: Callable[
             [DisplacementContext], None
         ] = maxwell_boltzmann_distribution,
-        operation: OperationType | None = None,
+        operation: IntegratorType | None = None,
     ) -> None:
         """Initialize the `HMCDisplacementMove` object."""
         super().__init__(operation, apply_constraints=True)
 
         self.max_attempts: int = 10
-        self.distribution: Callable[[ContextType], None] = distribution
+        self.distribution: Callable[[HContextType], None] = distribution
 
     def attempt_displacement(
-        self, context: ContextType, sample_momenta: bool = True
+        self, context: HContextType, sample_momenta: bool = True
     ) -> bool:
         """
         Attempt to move the atoms using the provided integrator and check against `check_move`. The move is attempted `max_attempts` number of times. If the move is successful, return True, otherwise, return False.
@@ -311,7 +318,7 @@ class HamiltonianDisplacementMove[
         for _ in range(self.max_attempts):
             if sample_momenta:
                 self.distribution(context)
-                context.last_kinetic_energy = atoms.get_kinetic_energy()
+                context.last_kinetic_energy = atoms.get_kinetic_energy()  # type: ignore
 
             self.operation.integrate(context)
 
@@ -324,7 +331,7 @@ class HamiltonianDisplacementMove[
 
         return False
 
-    def __call__(self, context: ContextType) -> bool:
+    def __call__(self, context: HContextType) -> bool:
         return self.attempt_displacement(context)
 
     @property

@@ -193,7 +193,7 @@ class Rotation(BaseOperation):
 
         molecule = cast("Atoms", atoms[context._moving_indices])
         phi, theta, psi = context.rng.uniform(0, 2 * np.pi, 3)
-        molecule.euler_rotate(phi, theta, psi, center="COM")
+        molecule.euler_rotate(phi, theta, psi, center="COM")  # type: ignore
 
         return molecule.positions - context.atoms.positions[context._moving_indices]
 

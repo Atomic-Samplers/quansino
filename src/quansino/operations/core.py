@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from quansino.protocols import Operation
 
 
-T = TypeVar("T", bound="Operation")
+OperationType = TypeVar("OperationType", bound="Operation")
 
 
 class BaseOperation:
@@ -60,10 +60,14 @@ class BaseOperation:
     def __add__(self, other: Operation) -> CompositeOperation[Operation]: ...
 
     @overload
-    def __add__(self: T, other: CompositeOperation[T]) -> CompositeOperation[T]: ...
+    def __add__(
+        self: OperationType, other: CompositeOperation[OperationType]
+    ) -> CompositeOperation[OperationType]: ...
 
     @overload
-    def __add__(self: T, other: T) -> CompositeOperation[T]: ...
+    def __add__(
+        self: OperationType, other: OperationType
+    ) -> CompositeOperation[OperationType]: ...
 
     def __add__(self, other) -> CompositeOperation:
         """
@@ -88,7 +92,7 @@ class BaseOperation:
         else:
             return CompositeOperation([self, other])
 
-    def __mul__(self, n: int) -> CompositeOperation[Self]:
+    def __mul__(self, n: int) -> CompositeOperation[BaseOperation]:
         """
         Multiply the operation by an integer to create a composite operation.
 
