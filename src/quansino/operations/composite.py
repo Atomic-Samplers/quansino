@@ -13,7 +13,6 @@ if TYPE_CHECKING:
     from quansino.mc.contexts import Context
 
 
-T = TypeVar("T", bound="Operation")
 OperationType = TypeVar("OperationType", bound="Operation")
 
 
@@ -73,13 +72,17 @@ class CompositeOperation(Generic[OperationType]):
         return np.sum([op.calculate(context) for op in self.operations], axis=0)
 
     @overload
-    def __add__(self: T, other: CompositeOperation[T]) -> CompositeOperation[T]: ...
+    def __add__(
+        self: OperationType, other: CompositeOperation[OperationType]
+    ) -> CompositeOperation[OperationType]: ...
 
     @overload
     def __add__(self, other: CompositeOperation) -> CompositeOperation[Operation]: ...
 
     @overload
-    def __add__(self: T, other: T) -> CompositeOperation[T]: ...
+    def __add__(
+        self: OperationType, other: OperationType
+    ) -> CompositeOperation[OperationType]: ...
 
     @overload
     def __add__(self, other) -> CompositeOperation[Operation]: ...

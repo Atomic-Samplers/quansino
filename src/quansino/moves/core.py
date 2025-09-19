@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from quansino.protocols import Move
     from quansino.type_hints import IntegerArray
 
-T = TypeVar("T", bound="BaseMove")
+MoveType = TypeVar("MoveType", bound="BaseMove")
 ContextType = TypeVar("ContextType", bound="Context")
 OperationType = TypeVar("OperationType", bound="Operation | Integrator")
 
@@ -179,10 +179,12 @@ class BaseMove(Generic[OperationType, ContextType]):
         return instance
 
     @overload
-    def __add__(self: T, other: T) -> CompositeMove[T]: ...
+    def __add__(self: MoveType, other: MoveType) -> CompositeMove[MoveType]: ...
 
     @overload
-    def __add__(self: T, other: CompositeMove[T]) -> CompositeMove[T]: ...
+    def __add__(
+        self: MoveType, other: CompositeMove[MoveType]
+    ) -> CompositeMove[MoveType]: ...
 
     @overload
     def __add__(self, other: CompositeMove[Move]) -> CompositeMove[Move]: ...
