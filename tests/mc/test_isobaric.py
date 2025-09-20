@@ -113,16 +113,16 @@ def test_isobaric_simulation(bulk_small, rng):
     """Test the `Isobaric` class with a simulation."""
     mc = Isobaric(
         bulk_small,
-        temperature=300.0,
-        pressure=1.0 * bar,
+        temperature=3000.0,
+        pressure=1000000.0 * bar,
         max_cycles=10,
         default_displacement_move=None,
-        default_cell_move=CellMove(IsotropicDeformation(0.05)),
+        default_cell_move=CellMove(IsotropicDeformation(0.01)),
     )
 
     last_cell = mc.atoms.cell.copy()
 
-    for step in mc.irun(10):
+    for step in mc.irun(50):
         for move_name in step:
             assert_allclose(mc.context.last_cell, mc.atoms.cell)
             assert_allclose(mc.context.last_positions, mc.atoms.get_positions())

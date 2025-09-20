@@ -9,6 +9,8 @@ from scipy.linalg import expm
 from quansino.operations.core import BaseOperation
 
 if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
     from quansino.mc.contexts import Context
     from quansino.type_hints import Deformation
 
@@ -21,6 +23,8 @@ class DeformationOperation(BaseOperation):
     ----------
     max_value : float
         The maximum deformation value for the operation, determines the magnitude of the deformation.
+    mask : NDArray[np.bool]
+        A boolean array indicating which directions are allowed to deform. True values indicate allowed directions. Must be a 3x3 array.
 
     Attributes
     ----------
@@ -28,11 +32,13 @@ class DeformationOperation(BaseOperation):
         The maximum deformation parameter controlling the deformation magnitude.
     """
 
-    __slots__ = ("max_value",)
+    __slots__ = ("mask", "max_value")
 
-    def __init__(self, max_value: float) -> None:
+    def __init__(self, max_value: float, mask: NDArray[np.bool] | None = None) -> None:
         """Initialize the `DeformationOperation` object."""
         self.max_value = max_value
+
+        self.mask = np.ones((3, 3), dtype=bool) if mask is None else mask
 
     def to_dict(self) -> dict[str, Any]:
         """
@@ -82,7 +88,7 @@ class AnisotropicDeformation(DeformationOperation):
         deformation_tensor[2, 0] = deformation_tensor[0, 2]
         deformation_tensor[2, 1] = deformation_tensor[1, 2]
 
-        return expm(deformation_tensor)
+        return expm(deformation_tensor) * self.mask + np.eye(3) * (~self.mask)
 
 
 class ShapeDeformation(DeformationOperation):
@@ -124,7 +130,7 @@ class ShapeDeformation(DeformationOperation):
         deformation_tensor[1, 1] = components[1] - diag_mean
         deformation_tensor[2, 2] = components[2] - diag_mean
 
-        return expm(deformation_tensor)
+        return expm(deformation_tensor) * self.mask + np.eye(3) * (~self.mask)
 
 
 class IsotropicDeformation(DeformationOperation):
@@ -148,4 +154,6 @@ class IsotropicDeformation(DeformationOperation):
         Deformation
             A 3x3 deformation tensor with identical diagonal elements.
         """
-        return np.eye(3) * exp(context.rng.uniform(-self.max_value, self.max_value))
+        return np.eye(3) * exp(
+            context.rng.uniform(-self.max_value, self.max_value)
+        ) * self.mask + np.eye(3) * (~self.mask)

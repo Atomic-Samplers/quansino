@@ -166,9 +166,58 @@ class IsobaricCriteria(BaseCriteria):
         old_volume = context.last_cell.volume
 
         return context.rng.random() < math.exp(
-            -energy_difference / temperature
-            + context.pressure * (current_volume - old_volume)
-            - (len(atoms) + 1) * np.log(current_volume / old_volume) * temperature
+            -(energy_difference + context.pressure * (current_volume - old_volume))
+            / temperature
+            + (len(atoms) + 1) * np.log(current_volume / old_volume)
+        )
+
+
+class IsotensionCriteria(BaseCriteria):
+    """
+    Acceptance criteria for moves in the isothermal-isotension (NST) ensemble.
+    """
+
+    def evaluate(self, context: DeformationContext) -> bool:
+        """
+        Evaluate the acceptance criteria for a Monte Carlo move.
+
+        Parameters
+        ----------
+        context : DeformationContext
+            The context of the Monte Carlo simulation.
+
+        Returns
+        -------
+        bool
+            True if the move is accepted, False otherwise.
+        """
+        atoms = context.atoms
+        temperature = context.temperature * kB
+        energy_difference = atoms.get_potential_energy() - context.last_potential_energy
+
+        current_cell = atoms.get_cell().array
+        old_cell = context.last_cell.array
+
+        current_volume = atoms.cell.volume
+        old_volume = context.last_cell.volume
+
+        self.strain_tensor = 0.5 * (
+            np.linalg.inv(old_cell.T)
+            @ current_cell.T
+            @ old_cell
+            @ np.linalg.inv(old_cell)
+            - np.eye(3)
+        )
+
+        elastic_energy = context.pressure * (
+            current_volume - old_volume
+        ) + old_volume * np.trace(
+            (context.external_stress - context.pressure) @ self.strain_tensor
+        )
+
+        return context.rng.random() < math.exp(
+            -(energy_difference + elastic_energy) / temperature
+            + (len(atoms) + 1) * np.log(atoms.get_volume() / context.last_cell.volume)
         )
 
 

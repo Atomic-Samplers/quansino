@@ -5,9 +5,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, ClassVar, Generic, TypeVar, cast
 from warnings import warn
 
-from quansino.mc.canonical import Canonical
+import numpy as np
+
 from quansino.mc.contexts import DeformationContext
-from quansino.mc.criteria import CanonicalCriteria, IsobaricCriteria
+from quansino.mc.criteria import CanonicalCriteria, IsotensionCriteria
+from quansino.mc.isobaric import Isobaric
 from quansino.moves.cell import CellMove
 from quansino.moves.displacement import DisplacementMove
 
@@ -16,12 +18,13 @@ if TYPE_CHECKING:
     from ase.atoms import Atoms
 
     from quansino.protocols import Criteria, Move
+    from quansino.type_hints import Stress
 
 MoveType = TypeVar("MoveType", bound="Move")
 CriteriaType = TypeVar("CriteriaType", bound="Criteria")
 
 
-class Isobaric(Canonical[MoveType, CriteriaType], Generic[MoveType, CriteriaType]):
+class Isotension(Isobaric[MoveType, CriteriaType], Generic[MoveType, CriteriaType]):
     """
     Isobaric (NPT) Monte Carlo simulation object for performing NPT simulations. This class is a subclass of the [`Canonical`][quansino.mc.canonical.Canonical] class and provides additional functionality specific to isobaric simulations. It uses the [`DeformationContext`][quansino.mc.contexts.DeformationContext] context by default.
 
@@ -52,7 +55,7 @@ class Isobaric(Canonical[MoveType, CriteriaType], Generic[MoveType, CriteriaType
 
     default_criteria: ClassVar = {
         DisplacementMove: CanonicalCriteria,
-        CellMove: IsobaricCriteria,
+        CellMove: IsotensionCriteria,
     }
     default_context: ClassVar = DeformationContext
 
@@ -61,20 +64,32 @@ class Isobaric(Canonical[MoveType, CriteriaType], Generic[MoveType, CriteriaType
         atoms: Atoms,
         temperature: float,
         pressure: float = 0.0,
+        external_stress: Stress | None = None,
         max_cycles: int | None = None,
         default_displacement_move: MoveType | None = None,
         default_cell_move: MoveType | None = None,
         **mc_kwargs,
     ) -> None:
-        """Initialize the `Isobaric` object."""
+        """Initialize the `Isotension` object."""
         super().__init__(
-            atoms, temperature, max_cycles, default_displacement_move, **mc_kwargs
+            atoms,
+            temperature,
+            pressure,
+            max_cycles,
+            default_displacement_move,
+            **mc_kwargs,
         )
 
         self.pressure = pressure
+        self.external_stress = (
+            np.zeros((3, 3)) if external_stress is None else external_stress
+        )
 
         if default_cell_move:
             self.add_move(default_cell_move, name="default_cell_move")
+
+            # if self.default_logger:
+            # self.default_logger.add_field()
 
         self.set_default_probability()
 
@@ -88,55 +103,25 @@ class Isobaric(Canonical[MoveType, CriteriaType], Generic[MoveType, CriteriaType
             )
 
     @property
-    def pressure(self) -> float:
+    def external_stress(self) -> Stress:
         """
-        The pressure of the simulation.
+        The external stress tensor applied to the system.
 
         Returns
         -------
-        float
-            The pressure in eV/Å^3.
+        Stress
+            The external stress tensor in eV/Å^3.
         """
-        return self.context.pressure
+        return self.context.external_stress
 
-    @pressure.setter
-    def pressure(self, pressure: float) -> None:
+    @external_stress.setter
+    def external_stress(self, stress: Stress) -> None:
         """
-        Set the pressure of the simulation.
+        Set the external stress tensor applied to the system.
 
         Parameters
         ----------
-        pressure : float
-            The pressure in eV/Å^3.
+        stress : Stress
+            The external stress tensor in eV/Å^3.
         """
-        self.context.pressure = pressure
-
-    def set_default_probability(self) -> None:
-        """
-        Set the default probability for the cell and displacement moves.
-
-        The probability for cell moves is set to 1/(N+1) and the probability for displacement moves is set to 1/(1+1/N), where N is the number of atoms.
-        """
-        if cell_move := self.moves.get("default_cell_move"):
-            cell_move.probability = 1 / (len(self.atoms) + 1)
-        if displacement_move := self.moves.get("default_displacement_move"):
-            displacement_move.probability = 1 / (1 + 1 / len(self.atoms))
-
-    def validate_simulation(self) -> None:
-        """
-        This method also ensures that the cell is saved in the context.
-        """
-        self.context.last_cell = self.atoms.get_cell()
-
-        super().validate_simulation()
-
-    def revert_state(self) -> None:
-        """
-        Revert to the previously saved state and undo the last move. This method restores the cell state in addition to the state restored by the parent class.
-        """
-        super().revert_state()
-
-        try:
-            self.atoms.calc.atoms.cell = self.atoms.cell.copy()  # type: ignore[try-attr]
-        except AttributeError:
-            warn("Atoms object does not have calculator attached.", stacklevel=2)
+        self.context.external_stress = stress

@@ -31,10 +31,10 @@ if TYPE_CHECKING:
     from quansino.protocols import Criteria, Move
 
 MoveType = TypeVar("MoveType", bound="Move")
-ContextType = TypeVar("ContextType", bound="Criteria")
+CriteriaType = TypeVar("CriteriaType", bound="Criteria")
 
 
-class MonteCarlo(Driver, Generic[MoveType, ContextType]):
+class MonteCarlo(Driver, Generic[MoveType, CriteriaType]):
     """
     Base class providing an interface for all Monte Carlo classes. The `MonteCarlo` class is responsible for selecting moves to perform via the [`yield_moves`][quansino.mc.core.MonteCarlo.yield_moves] method. This class is also responsible for managing the moves, their parameters (interval, probability, minimum count), and their acceptance criteria. Logging and trajectory writing are handled by the parent [`Driver`][quansino.mc.driver.Driver] class. When necessary, communication between the Monte Carlo simulation and the moves is facilitated by the context object. The Monte Carlo class and its subclasses should not directly modify the moves, but rather interact using the context object.
 
@@ -102,7 +102,7 @@ class MonteCarlo(Driver, Generic[MoveType, ContextType]):
         logging_mode: str = "a",
     ) -> None:
         """Initialize the MonteCarlo object."""
-        self.moves: dict[str, MoveStorage[MoveType, ContextType]] = {}
+        self.moves: dict[str, MoveStorage[MoveType, CriteriaType]] = {}
 
         self.__seed: Final = seed or PCG64().random_raw()
         self._rng = RNG(PCG64(self.__seed))
@@ -129,7 +129,7 @@ class MonteCarlo(Driver, Generic[MoveType, ContextType]):
     def add_move(
         self,
         move: MoveType,
-        criteria: ContextType | None = None,
+        criteria: CriteriaType | None = None,
         name: str = "default",
         interval: int = 1,
         probability: float = 1.0,
@@ -163,7 +163,7 @@ class MonteCarlo(Driver, Generic[MoveType, ContextType]):
         if criteria is None:
             for move_type in self.default_criteria:
                 if isinstance(move, move_type):
-                    criteria = cast("ContextType", self.default_criteria[move_type]())
+                    criteria = cast("CriteriaType", self.default_criteria[move_type]())
                     break
 
         if criteria is None:
@@ -171,7 +171,7 @@ class MonteCarlo(Driver, Generic[MoveType, ContextType]):
                 f"No criteria provided, and no default criteria found for move type {type(move)}."
             )
 
-        self.moves[name] = MoveStorage[MoveType, ContextType](
+        self.moves[name] = MoveStorage[MoveType, CriteriaType](
             move=move,
             criteria=criteria,
             interval=interval,
@@ -296,7 +296,7 @@ class MonteCarlo(Driver, Generic[MoveType, ContextType]):
             setattr(mc.context, key, value)
 
         for name, move_storage_data in data.get("moves", {}).items():
-            move_storage_class: type[MoveStorage[MoveType, ContextType]] = (
+            move_storage_class: type[MoveStorage[MoveType, CriteriaType]] = (
                 get_typed_class(move_storage_data["name"], MoveStorage)
             )
             move_storage = move_storage_class.from_dict(move_storage_data)
