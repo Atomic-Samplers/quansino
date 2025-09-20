@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from ase.cell import Cell
     from numpy.random import Generator
 
-    from quansino.type_hints import IntegerArray, Momenta, Positions
+    from quansino.type_hints import IntegerArray, Momenta, Positions, Stress
 
 
 class Context:
@@ -174,7 +174,7 @@ class HamiltonianContext(Context):
         Save the current state of the context, including the last momenta and kinetic energy.
         """
         self.last_momenta = self.atoms.get_momenta()
-        self.last_kinetic_energy = self.atoms.get_kinetic_energy()
+        self.last_kinetic_energy = self.atoms.get_kinetic_energy()  # type: ignore[ase]
 
         super().save_state()
 
@@ -226,13 +226,14 @@ class DeformationContext(DisplacementContext):
         The cell of the atoms in the last saved state.
     """
 
-    __slots__ = ("last_cell", "pressure")
+    __slots__ = ("external_stress", "last_cell", "pressure")
 
     def __init__(self, atoms: Atoms, rng: Generator) -> None:
         """Initialize the `DeformationContext` object."""
         super().__init__(atoms, rng)
 
         self.pressure: float = 0.0
+        self.external_stress: Stress = np.zeros((3, 3))
         self.last_cell: Cell = atoms.get_cell()
 
     def save_state(self) -> None:

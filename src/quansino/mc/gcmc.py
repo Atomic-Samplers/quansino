@@ -18,10 +18,12 @@ if TYPE_CHECKING:
 
 
 MoveType = TypeVar("MoveType", bound="Move")
-ContextType = TypeVar("ContextType", bound="Criteria")
+CriteriaType = TypeVar("CriteriaType", bound="Criteria")
 
 
-class GrandCanonical(Canonical[MoveType, ContextType], Generic[MoveType, ContextType]):
+class GrandCanonical(
+    Canonical[MoveType, CriteriaType], Generic[MoveType, CriteriaType]
+):
     """
     Grand Canonical (μVT) Monte Carlo object for performing simulations in the grand canonical ensemble. This class is a subclass of the [`Canonical`][quansino.mc.canonical.Canonical] class and provides additional functionality specific to grand canonical simulations. It uses the [`ExchangeContext`][quansino.mc.contexts.ExchangeContext] context by default.
 

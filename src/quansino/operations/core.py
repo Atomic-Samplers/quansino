@@ -92,7 +92,7 @@ class BaseOperation:
         else:
             return CompositeOperation([self, other])
 
-    def __mul__(self, n: int) -> CompositeOperation[BaseOperation]:
+    def __mul__(self, n: int) -> CompositeOperation[Self]:
         """
         Multiply the operation by an integer to create a composite operation.
 
