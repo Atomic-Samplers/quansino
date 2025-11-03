@@ -6,10 +6,7 @@ from abc import abstractmethod
 from contextlib import suppress
 from io import IOBase
 from pathlib import Path
-from typing import IO, TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from quansino.io.file import FileManager
+from typing import IO, Any
 
 
 class Observer:
@@ -34,7 +31,7 @@ class Observer:
         self.interval = interval
 
     @abstractmethod
-    def __call__(self, *args: Any, **kwargs: Any):
+    def __call__(self, *args: Any, **kwargs: Any) -> None:
         """
         Call the observer with the given arguments. This method should be overridden by subclasses to implement specific behavior.
 
@@ -45,6 +42,7 @@ class Observer:
         **kwargs : Any
             Keyword arguments passed to the observer.
         """
+        ...
 
     @abstractmethod
     def attach_simulation(self, *args: Any, **kwargs: Any) -> None:
@@ -58,6 +56,14 @@ class Observer:
         **kwargs : Any
             Keyword arguments passed to the observer.
         """
+        ...
+
+    @abstractmethod
+    def close(self) -> None:
+        """
+        Close the observer and release any resources. This method should be overridden by subclasses to implement specific cleanup behavior.
+        """
+        ...
 
     def to_dict(self) -> dict[str, Any]:
         """
@@ -214,17 +220,6 @@ class TextObserver(Observer):
             )
 
         atexit.register(self.close)
-
-    def attach_simulation(self, file_manager: FileManager) -> None:
-        """
-        Attach the simulation to the `Observer` via a `FileManager`.
-
-        Parameters
-        ----------
-        file_manager : FileManager
-            The `FileManager` instance to attach to the observer.
-        """
-        file_manager.register(self.close)
 
     def close(self) -> None:
         """Close the file if it is not a standard stream."""

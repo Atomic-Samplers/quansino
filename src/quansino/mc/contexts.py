@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, ClassVar
 from warnings import warn
 
 import numpy as np
@@ -386,3 +386,49 @@ class ExchangeContext(DisplacementContext):
 class HamiltonianExchangeContext(HamiltonianContext, ExchangeContext):
 
     __slots__ = ("last_kinetic_energy", "last_momenta")
+
+
+class MultiContexts:
+    """
+    Class to manage multiple contexts.
+
+    Parameters
+    ----------
+    contexts : list[Context]
+        List of context objects to manage.
+
+    Attributes
+    ----------
+    contexts : list[Context]
+        List of context objects being managed.
+    """
+
+    default_context: ClassVar[type[Context]] = Context
+    __slots__ = ("active_context", "contexts")
+
+    def __init__(self, contexts: list[Context]) -> None:
+        """Initialize the `MultiContexts` object."""
+        self.contexts = contexts
+
+        self.active_context: Context | None = None
+
+    def save_state(self) -> None:
+        """Save the state of all managed contexts."""
+        for context in self.contexts:
+            context.save_state()
+
+    def revert_state(self) -> None:
+        """Revert the state of all managed contexts."""
+        for context in self.contexts:
+            context.revert_state()
+
+    def to_dict(self) -> dict[str, Any]:
+        """
+        Convert the `MultiContexts` object to a dictionary.
+
+        Returns
+        -------
+        dict[str, Any]
+            A dictionary representation of the `MultiContexts` object.
+        """
+        return {"contexts": [context.to_dict() for context in self.contexts]}

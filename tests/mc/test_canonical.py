@@ -44,7 +44,7 @@ def test_canonical(bulk_small, tmp_path):
     assert data["name"] == "Canonical"
     assert data["attributes"]["step_count"] == 0
     assert data["context"]["temperature"] == 10.0
-    assert data["kwargs"]["seed"] == mc._MonteCarlo__seed  # type: ignore
+    assert data["kwargs"]["seed"] == mc._seed  # type: ignore
     assert data["rng_state"] == mc._rng.bit_generator.state
     assert (
         data["moves"]["default_displacement_move"]["kwargs"]["move"]["name"]
@@ -163,7 +163,7 @@ def test_hamiltonian_canonical(bulk_small, tmp_path):
     assert data["name"] == "HamiltonianCanonical"
     assert data["attributes"]["step_count"] == 0
     assert data["context"]["temperature"] == 2000.0
-    assert data["kwargs"]["seed"] == mc._MonteCarlo__seed  # type: ignore
+    assert data["kwargs"]["seed"] == mc._seed  # type: ignore
     assert data["rng_state"] == mc._rng.bit_generator.state
 
     assert isinstance(mc.context, HamiltonianDisplacementContext)
@@ -260,7 +260,7 @@ def test_canonical_restart(bulk_small, tmp_path):
     assert mc.default_restart is not None
     assert reconstructed_mc.default_restart is None
 
-    assert reconstructed_mc._MonteCarlo__seed == mc._MonteCarlo__seed  # type: ignore
+    assert reconstructed_mc._seed == mc._seed  # type: ignore
     assert reconstructed_mc._rng.bit_generator.state == mc._rng.bit_generator.state
     assert reconstructed_mc._rng.random() == mc._rng.random()
     assert reconstructed_mc._rng.integers(0, 100) == mc._rng.integers(0, 100)

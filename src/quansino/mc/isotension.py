@@ -88,11 +88,6 @@ class Isotension(Isobaric[MoveType, CriteriaType], Generic[MoveType, CriteriaTyp
         if default_cell_move:
             self.add_move(default_cell_move, name="default_cell_move")
 
-            # if self.default_logger:
-            # self.default_logger.add_field()
-
-        self.set_default_probability()
-
         if isinstance(self.context, DeformationContext):
             self.context = cast("DeformationContext", self.context)
         else:

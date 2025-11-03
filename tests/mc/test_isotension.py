@@ -41,18 +41,20 @@ def test_isotension_simulation(bulk_small):
     mc = Isotension(
         bulk_small,
         temperature=300.0,
-        pressure=1.0 * bar,
-        external_stress=np.array([[1000000, 0, 0], [0, -1000000, 0], [0, 0, 1000000]])
+        pressure=0.0,
+        external_stress=np.array([[-100000, 0, 0], [0, 100000, 0], [0, 0, -100000]])
         * bar,
         max_cycles=10,
         default_displacement_move=None,
+        trajectory="test_isotension_simulation.xyz",
+        logging_mode="w",
         default_cell_move=CellMove(AnisotropicDeformation(0.025)),
     )
 
     last_cell = mc.atoms.cell.copy()
     first_cell = mc.atoms.cell.copy()
 
-    for step in mc.irun(50):
+    for step in mc.irun(100):
         for move_name in step:
             assert_allclose(mc.context.last_cell, mc.atoms.cell)
             assert_allclose(mc.context.last_positions, mc.atoms.get_positions())
@@ -67,9 +69,9 @@ def test_isotension_simulation(bulk_small):
             assert_allclose(mc.atoms.cell, last_cell)
 
     assert not np.allclose(mc.atoms.cell, first_cell)
-    assert mc.atoms.cell.array[0, 0] < first_cell.array[0, 0]
-    assert mc.atoms.cell.array[1, 1] > first_cell.array[1, 1]
-    assert mc.atoms.cell.array[2, 2] < first_cell.array[2, 2]
+    assert mc.atoms.cell.array[0, 0] > first_cell.array[0, 0]
+    assert mc.atoms.cell.array[1, 1] < first_cell.array[1, 1]
+    assert mc.atoms.cell.array[2, 2] > first_cell.array[2, 2]
 
 
 def test_isotension_simulation_with_mask(bulk_small):
@@ -77,16 +79,18 @@ def test_isotension_simulation_with_mask(bulk_small):
     mc = Isotension(
         bulk_small,
         temperature=300.0,
-        pressure=1.0 * bar,
+        pressure=0.0,
         external_stress=np.array([[1000000, 0, 0], [0, -1000000, 0], [0, 0, 1000000]])
         * bar,
         max_cycles=10,
         default_displacement_move=None,
+        trajectory="test_isotension_simulation_with_mask.xyz",
+        logging_mode="w",
         default_cell_move=CellMove(
             AnisotropicDeformation(
                 0.025,
                 mask=np.array(
-                    [[True, False, False], [False, True, False], [False, False, True]]
+                    [[True, False, False], [False, False, False], [False, False, False]]
                 ),
             )
         ),
@@ -95,7 +99,7 @@ def test_isotension_simulation_with_mask(bulk_small):
     last_cell = mc.atoms.cell.copy()
     first_cell = mc.atoms.cell.copy()
 
-    for step in mc.irun(50):
+    for step in mc.irun(100):
         for move_name in step:
             assert_allclose(mc.context.last_cell, mc.atoms.cell)
             assert_allclose(mc.context.last_positions, mc.atoms.get_positions())
@@ -110,6 +114,7 @@ def test_isotension_simulation_with_mask(bulk_small):
             assert_allclose(mc.atoms.cell, last_cell)
 
     assert not np.allclose(mc.atoms.cell, first_cell)
+
     assert mc.atoms.cell.array[0, 0] < first_cell.array[0, 0]
-    assert mc.atoms.cell.array[1, 1] > first_cell.array[1, 1]
-    assert mc.atoms.cell.array[2, 2] < first_cell.array[2, 2]
+    assert np.allclose(mc.atoms.cell.array[1, 1], first_cell.array[1, 1])
+    assert np.allclose(mc.atoms.cell.array[2, 2], first_cell.array[2, 2])
