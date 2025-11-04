@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from typing import IO, TYPE_CHECKING, Final
-from warnings import warn
 
-from quansino.io.file import FileManager
+from numpy.random import PCG64
+from numpy.random import Generator as RNG
+
+from quansino.io.file import ObserverManager
 from quansino.io.logger import Logger
 from quansino.io.restart import RestartObserver
 from quansino.io.trajectory import TrajectoryObserver
@@ -15,8 +17,6 @@ if TYPE_CHECKING:
     from typing import Any
 
     from ase.atoms import Atoms
-
-    from quansino.io.core import Observer
 
 
 class Driver:
@@ -52,7 +52,7 @@ class Driver:
         The current step count of the simulation.
     max_steps : int
         The maximum number of steps to run in the simulation.
-    file_manager : FileManager
+    file_manager : ObserverManager
         File manager for handling file I/O operations.
     default_logger : Logger | None
         The default logger for the simulation, if set.
@@ -64,17 +64,15 @@ class Driver:
 
     def __init__(
         self,
-        atoms: Atoms,
+        seed: int | None = None,
         logfile: Logger | IO | Path | str | None = None,
-        trajectory: TrajectoryObserver | IO | Path | str | None = None,
         restart_file: RestartObserver | IO | Path | str | None = None,
         logging_interval: int = 1,
         logging_mode: str = "a",
     ) -> None:
         """Initialize the `Driver` object."""
-        self.atoms = atoms
-
-        self.observers: dict[str, Observer] = {}
+        self._seed: Final = seed or PCG64().random_raw()
+        self._rng = RNG(PCG64(self._seed))
 
         self.logging_interval = logging_interval
         self.logging_mode = logging_mode
@@ -82,62 +80,10 @@ class Driver:
         self.step_count: int = 0
         self.max_steps: int = 0
 
-        self.file_manager: Final = FileManager()
+        self.file_manager: Final = ObserverManager()
 
         self.default_logger = logfile
-        self.default_trajectory = trajectory
         self.default_restart = restart_file
-
-    def attach_observer(self, name: str, observer: Observer) -> None:
-        """
-        Attach an observer to the simulation.
-
-        Parameters
-        ----------
-        name : str
-            The name of the observer.
-        observer : Observer
-            The observer object to attach. Must be a subclass of `Observer`.
-        """
-        observer.attach_simulation(self.file_manager)
-        self.observers[name] = observer
-
-    def detach_observer(self, name: str) -> None:
-        """
-        Detach an observer by name.
-
-        Parameters
-        ----------
-        name : str
-            The name of the observer to detach.
-        """
-        if self.observers.pop(name, None) is None:
-            warn(f"`Observer` '{name}' not found when deleting.", UserWarning, 2)
-
-    def call_observers(self) -> None:
-        """
-        Call all attached observers based on their configured intervals. The observers will be called if their interval matches the current step count.
-        """
-        for observer in self.observers.values():
-            interval = observer.interval
-            if (interval > 0 and self.step_count % interval == 0) or (
-                interval < 0 and self.step_count == abs(interval)
-            ):
-                observer()
-
-    def validate_simulation(self) -> None:
-        """
-        Validate the simulation setup. Checks that the atoms object has a properly configured calculator and computes the initial potential energy.
-
-        Raises
-        ------
-        AttributeError
-            If atoms object has no calculator or calculator has no results attribute.
-        """
-        if self.atoms.calc is None:
-            raise AttributeError("Atoms object must have a calculator attached to it.")
-        if not hasattr(self.atoms.calc, "results"):
-            raise AttributeError("Calculator object must have a results attribute.")
 
     def irun(self, steps=100_000_000) -> Generator[Any, None, None]:
         """
@@ -154,6 +100,7 @@ class Driver:
             The result of each simulation step.
         """
         self.validate_simulation()
+
         self.max_steps = self.step_count + steps
 
         if self.step_count == 0:
@@ -166,9 +113,23 @@ class Driver:
             yield self.step()
             self.step_count += 1
 
-            self.atoms.get_potential_energy()
-
             self.call_observers()
+
+    def call_observers(self) -> None:
+        """
+        Call all attached observers based on their configured intervals. The observers will be called if their interval matches the current step count.
+        """
+        for observer in self.file_manager.observers.values():
+            interval = observer.interval
+            if (interval > 0 and self.step_count % interval == 0) or (
+                interval < 0 and self.step_count == abs(interval)
+            ):
+                observer()
+
+    def validate_simulation(self) -> None:
+        """
+        Validate that the simulation is properly set up before running. This method can be overridden by subclasses to implement specific validation logic.
+        """
 
     def run(self, steps=100_000_000) -> None:
         """
@@ -217,53 +178,14 @@ class Driver:
         """
         return {
             "name": self.__class__.__name__,
-            "atoms": self.atoms.copy(),
+            "rng_state": self._rng.bit_generator.state,
             "kwargs": {
                 "logging_interval": self.logging_interval,
                 "logging_mode": self.logging_mode,
+                "seed": self._seed,
             },
             "attributes": {"step_count": self.step_count},
         }
-
-    @property
-    def default_trajectory(self) -> TrajectoryObserver | None:
-        """
-        Get the default trajectory observer, if set.
-
-        Returns
-        -------
-        TrajectoryObserver | None
-            The default trajectory observer, or None if not set.
-        """
-        return self._default_trajectory
-
-    @default_trajectory.setter
-    def default_trajectory(
-        self, default_trajectory: TrajectoryObserver | IO | Path | str | None
-    ) -> None:
-        """
-        (Un)set the default trajectory observer.
-
-        Parameters
-        ----------
-        default_trajectory : TrajectoryObserver | IO | Path | str | None
-            Trajectory observer or file specification, or None to unset the default trajectory observer.
-        """
-        if default_trajectory is None:
-            self._default_trajectory = None
-            return
-
-        if not isinstance(default_trajectory, TrajectoryObserver):
-            self._default_trajectory = TrajectoryObserver(
-                atoms=self.atoms,
-                file=default_trajectory,
-                interval=self.logging_interval,
-                mode=self.logging_mode,
-            )
-        else:
-            self._default_trajectory = default_trajectory
-
-        self.attach_observer("default_trajectory", self._default_trajectory)
 
     @property
     def default_logger(self) -> Logger | None:
@@ -300,7 +222,7 @@ class Driver:
         else:
             self._default_logger = default_logger
 
-        self.attach_observer("default_logger", self._default_logger)
+        self.file_manager.attach_observer("default_logger", self._default_logger)
 
     @property
     def default_restart(self) -> RestartObserver | None:
@@ -340,8 +262,100 @@ class Driver:
         else:
             self._default_restart = restart_observer
 
-        self.attach_observer("default_restart", self._default_restart)
+        self.file_manager.attach_observer("default_restart", self._default_restart)
 
     def close(self) -> None:
         """Close the file manager and clean up resources."""
         self.file_manager.close()
+
+
+class SingleDriver(Driver):
+    """
+    Base class for single-drive atomistic simulations. This class extends the `Driver` class to provide additional functionality specific to single-drive simulations.
+
+    Parameters
+    ----------
+    atoms : Atoms
+        The ASE Atoms object to operate on.
+    **driver_kwargs : Any
+        Additional keyword arguments to pass to the base `Driver` class.
+    """
+
+    def __init__(
+        self,
+        atoms: Atoms,
+        trajectory: TrajectoryObserver | IO | Path | str | None = None,
+        **driver_kwargs: Any,
+    ) -> None:
+        """Initialize the `SingleDriver` object."""
+        self.atoms = atoms
+
+        super().__init__(**driver_kwargs)
+
+        self.default_trajectory = trajectory
+
+    @property
+    def default_trajectory(self) -> TrajectoryObserver | None:
+        """
+        Get the default trajectory observer, if set.
+
+        Returns
+        -------
+        TrajectoryObserver | None
+            The default trajectory observer, or None if not set.
+        """
+        return self._default_trajectory
+
+    @default_trajectory.setter
+    def default_trajectory(
+        self, default_trajectory: TrajectoryObserver | IO | Path | str | None
+    ) -> None:
+        """
+        (Un)set the default trajectory observer.
+
+        Parameters
+        ----------
+        default_trajectory : TrajectoryObserver | IO | Path | str | None
+            Trajectory observer or file specification, or None to unset the default trajectory observer.
+        """
+        if default_trajectory is None:
+            self._default_trajectory = None
+            return
+
+        if not isinstance(default_trajectory, TrajectoryObserver):
+            self._default_trajectory = TrajectoryObserver(
+                atoms=self.atoms,
+                file=default_trajectory,
+                interval=self.logging_interval,
+                mode=self.logging_mode,
+            )
+        else:
+            self._default_trajectory = default_trajectory
+
+        self.file_manager.attach_observer(
+            "default_trajectory", self._default_trajectory
+        )
+
+
+class MultiDriver(Driver):
+    """
+    Base class for multi-systems atomistic simulations. This class extends the `Driver` class to provide additional functionality specific to multi-systems simulations.
+
+    Parameters
+    ----------
+    atoms_list : list[Atoms]
+        The list of ASE Atoms objects to operate on.
+    **driver_kwargs : Any
+        Additional keyword arguments to pass to the base `Driver` class.
+
+    Attributes
+    ----------
+    atoms_list : list[Atoms]
+        The list of ASE Atoms objects being simulated.
+    """
+
+    def __init__(self, atoms_list: list[Atoms], **driver_kwargs: Any) -> None:
+        """Initialize the `MultiDriver` object."""
+        self.atoms_list = atoms_list
+
+        super().__init__(**driver_kwargs)
