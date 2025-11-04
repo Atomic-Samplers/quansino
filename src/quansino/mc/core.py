@@ -4,16 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Generator
 from copy import deepcopy
-from typing import IO, TYPE_CHECKING, ClassVar, Final, Generic, Self, TypeVar, cast
+from typing import IO, TYPE_CHECKING, ClassVar, Generic, Self, TypeVar, cast
 from warnings import warn
 
 import numpy as np
-from numpy.random import PCG64
-from numpy.random import Generator as RNG
 
 from quansino.mc.contexts import Context
 from quansino.mc.criteria import BaseCriteria
-from quansino.mc.driver import Driver
+from quansino.mc.driver import SingleDriver
 from quansino.moves.core import BaseMove
 from quansino.registry import get_typed_class
 from quansino.utils.moves import MoveStorage
@@ -34,7 +32,7 @@ MoveType = TypeVar("MoveType", bound="Move")
 CriteriaType = TypeVar("CriteriaType", bound="Criteria")
 
 
-class MonteCarlo(Driver, Generic[MoveType, CriteriaType]):
+class MonteCarlo(SingleDriver, Generic[MoveType, CriteriaType]):
     """
     Base class providing an interface for all Monte Carlo classes. The `MonteCarlo` class is responsible for selecting moves to perform via the [`yield_moves`][quansino.mc.core.MonteCarlo.yield_moves] method. This class is also responsible for managing the moves, their parameters (interval, probability, minimum count), and their acceptance criteria. Logging and trajectory writing are handled by the parent [`Driver`][quansino.mc.driver.Driver] class. When necessary, communication between the Monte Carlo simulation and the moves is facilitated by the context object. The Monte Carlo class and its subclasses should not directly modify the moves, but rather interact using the context object.
 
@@ -101,27 +99,25 @@ class MonteCarlo(Driver, Generic[MoveType, CriteriaType]):
         logging_interval: int = 1,
         logging_mode: str = "a",
     ) -> None:
-        """Initialize the MonteCarlo object."""
+        """Initialize the `MonteCarlo` object."""
         self.moves: dict[str, MoveStorage[MoveType, CriteriaType]] = {}
-
-        self.__seed: Final = seed or PCG64().random_raw()
-        self._rng = RNG(PCG64(self.__seed))
 
         self.max_cycles = max_cycles
 
         self.acceptance_rate = 0.0
         self.move_history: list[tuple[str, bool | None]] = []
 
-        self.context = self.default_context(atoms, self._rng)
-
         super().__init__(
-            atoms,
+            atoms=atoms,
+            seed=seed,
             logfile=logfile,
             trajectory=trajectory,
             restart_file=restart_file,
             logging_interval=logging_interval,
             logging_mode=logging_mode,
         )
+
+        self.context = self.default_context(atoms, self._rng)
 
         if self.default_logger:
             self.default_logger.add_mc_fields(self)
@@ -221,8 +217,6 @@ class MonteCarlo(Driver, Generic[MoveType, CriteriaType]):
             )
             self.context.last_results = {}
 
-        super().validate_simulation()
-
     def run(self, steps=100_000_000) -> None:
         """
         Run the simulation for a given number of steps.
@@ -247,18 +241,16 @@ class MonteCarlo(Driver, Generic[MoveType, CriteriaType]):
         """
         dictionary = {
             **super().to_dict(),
+            "atoms": self.atoms.copy(),
             "name": self.__class__.__name__,
             "context": self.context.to_dict(),
-            "rng_state": self._rng.bit_generator.state,
             "moves": {
                 name: move_storage.to_dict()
                 for name, move_storage in self.moves.items()
             },
         }
 
-        dictionary.setdefault("kwargs", {}).update(
-            {"max_cycles": self.max_cycles, "seed": self.__seed}
-        )
+        dictionary.setdefault("kwargs", {}).update({"max_cycles": self.max_cycles})
 
         return dictionary
 
@@ -397,4 +389,4 @@ class MonteCarlo(Driver, Generic[MoveType, CriteriaType]):
         str
             A string representation of the Monte Carlo object.
         """
-        return f"{self.__class__.__name__}(atoms={self.atoms}, max_cycles={self.max_cycles}, seed={self.__seed}, moves={self.moves}, step_count={self.step_count}, default_logger={self.default_logger}, default_trajectory={self.default_trajectory}, default_restart={self.default_restart})"
+        return f"{self.__class__.__name__}(atoms={self.atoms}, max_cycles={self.max_cycles}, seed={self._seed}, moves={self.moves}, step_count={self.step_count}, default_logger={self.default_logger}, default_trajectory={self.default_trajectory}, default_restart={self.default_restart})"
