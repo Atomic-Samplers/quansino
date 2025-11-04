@@ -45,7 +45,7 @@ def test_mc_class(bulk_small):
     with pytest.raises(ValueError):
         mc.add_move(move, DummyCriteria(), probability=1, minimum_count=1000)
 
-    del mc.atoms.calc
+    mc.atoms.calc = None
 
     assert (
         mc.__repr__()
