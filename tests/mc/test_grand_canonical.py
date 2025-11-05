@@ -650,7 +650,7 @@ def test_grand_canonical_restart(bulk_small, tmp_path, rng):
     assert mc.default_restart is not None
     assert reconstructed_mc.default_restart is None
 
-    assert reconstructed_mc._MonteCarlo__seed == mc._MonteCarlo__seed  # type: ignore
+    assert reconstructed_mc._seed == mc._seed  # type: ignore
     assert reconstructed_mc._rng.bit_generator.state == mc._rng.bit_generator.state
     assert reconstructed_mc._rng.random() == mc._rng.random()
     assert reconstructed_mc._rng.integers(0, 100) == mc._rng.integers(0, 100)

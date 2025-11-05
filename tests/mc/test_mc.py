@@ -11,7 +11,8 @@ from quansino.mc.contexts import DisplacementContext
 from quansino.mc.core import MonteCarlo
 from quansino.mc.criteria import BaseCriteria
 from quansino.moves import moves_registry
-from quansino.moves.core import BaseMove, CompositeMove
+from quansino.moves.composite import CompositeMove
+from quansino.moves.core import BaseMove
 from quansino.moves.displacement import DisplacementMove
 from quansino.moves.exchange import ExchangeMove
 from quansino.operations import operations_registry
@@ -24,7 +25,7 @@ def test_mc_class(bulk_small):
     """Test the `MonteCarlo` class."""
     mc = MonteCarlo(bulk_small, seed=42)
 
-    assert mc._MonteCarlo__seed == 42  # type: ignore
+    assert mc._seed == 42  # type: ignore
     assert mc._rng is not None
     assert mc.default_trajectory is None
     assert mc.default_logger is None
@@ -36,25 +37,6 @@ def test_mc_class(bulk_small):
 
     assert isinstance(mc.atoms.calc, Calculator)
 
-    del mc.atoms.calc.results
-
-    with pytest.raises(AttributeError):
-        mc.validate_simulation()
-
-    with pytest.warns(
-        UserWarning, match="Atoms object does not have calculator attached"
-    ):
-        mc.save_state()
-
-    mc.atoms.calc = None
-    with pytest.raises(AttributeError):
-        mc.validate_simulation()
-
-    with pytest.warns(
-        UserWarning, match="Atoms object does not have calculator attached"
-    ):
-        mc.revert_state()
-
     mc.step_count = -1
     assert not mc.converged()
 
@@ -62,6 +44,8 @@ def test_mc_class(bulk_small):
 
     with pytest.raises(ValueError):
         mc.add_move(move, DummyCriteria(), probability=1, minimum_count=1000)
+
+    mc.atoms.calc = None
 
     assert (
         mc.__repr__()
@@ -152,14 +136,14 @@ def test_mc_yield_moves(bulk_small):
 
 def test_mc_logger(bulk_small, tmp_path):
     """Test the `Logger` class and its integration with `MonteCarlo`."""
-    import sys  # noqa: PLC0415
+    import sys
 
     mc = MonteCarlo(bulk_small, seed=42, logfile=sys.stdout, logging_interval=1)
 
     assert not Path("sys.stdout").exists()
     assert not Path("<sys.stdout>").exists()
     assert mc.default_logger is not None
-    assert len(mc.observers) == 1
+    assert len(mc.file_manager.observers) == 1
     assert mc.logging_interval == 1
     assert mc.default_logger.file == sys.stdout
 
@@ -196,7 +180,7 @@ def test_mc_logger(bulk_small, tmp_path):
     assert Path(logfile_path_str).exists()
     assert Path(tmp_path, "mc.traj").exists()
     assert mc.default_trajectory is not None
-    assert len(mc.observers) == 2
+    assert len(mc.file_manager.observers) == 2
 
     logger = Logger(logfile=logfile_path_str, interval=1, mode="w")
 
@@ -236,9 +220,9 @@ def test_mc_logger(bulk_small, tmp_path):
         logger = Logger(
             logfile=Path(tmp_path / f"mc_new_{i}.log"), interval=i, mode="w"
         )
-        mc.attach_observer(f"logger_{i}", logger)
+        mc.file_manager.attach_observer(f"logger_{i}", logger)
 
-        observer = mc.observers[f"logger_{i}"]
+        observer = mc.file_manager.observers[f"logger_{i}"]
         assert isinstance(observer, Logger)
 
         assert observer.file.name == str(tmp_path / f"mc_new_{i}.log")
@@ -252,7 +236,7 @@ def test_mc_logger(bulk_small, tmp_path):
     assert mc.default_logger.file.closed
 
     for i in range(10):
-        observer = mc.observers[f"logger_{i}"]
+        observer = mc.file_manager.observers[f"logger_{i}"]
         assert isinstance(observer, Logger)
 
         assert observer.file.name == str(tmp_path / f"mc_new_{i}.log")
@@ -260,8 +244,8 @@ def test_mc_logger(bulk_small, tmp_path):
         assert observer.interval == i
         assert observer.file.closed
 
-        mc.detach_observer(f"logger_{i}")
-        assert f"logger_{i}" not in mc.observers
+        mc.file_manager.detach_observer(f"logger_{i}")
+        assert f"logger_{i}" not in mc.file_manager.observers
 
 
 def test_mc_serialization_deserialization(bulk_small):

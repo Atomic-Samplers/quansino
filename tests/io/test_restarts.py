@@ -36,8 +36,8 @@ def test_restart_observer(bulk_small, tmp_path):
     assert restart_observer.file.name == str(Path(tmp_path, "restart_test.json"))
     assert restart_observer.accept_stream is False
 
-    mc.attach_observer("restart", restart_observer)
-    mc.attach_observer("restart_fixed", restart_observer_fixed)
+    mc.file_manager.attach_observer("restart", restart_observer)
+    mc.file_manager.attach_observer("restart_fixed", restart_observer_fixed)
 
     mc.run(10)
 

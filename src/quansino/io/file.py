@@ -3,12 +3,15 @@ from __future__ import annotations
 import atexit
 from contextlib import ExitStack, suppress
 from typing import TYPE_CHECKING, Any, Final, Self
+from warnings import warn
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from quansino.io.core import Observer
 
-class FileManager:
+
+class ObserverManager:
     """
     Class to automatically manage file resources. This class uses an [`ExitStack`][contextlib.ExitStack] object to register file resources that need to be closed when the program exits or when the context manager is exited. It can be used to ensure that files are properly closed, preventing resource leaks.
 
@@ -20,9 +23,9 @@ class FileManager:
     Example
     -------
     ``` python
-    from quansino.io.file import FileManager
+    from quansino.io.file import ObserverManager
 
-    with FileManager() as fm:
+    with ObserverManager() as fm:
         file = open("example.txt", "w")
         fm.register(file.close)  # Register the file close method
         file.write("Hello, World!")
@@ -35,8 +38,10 @@ class FileManager:
     """
 
     def __init__(self) -> None:
-        """Initialize the FileManager with an ExitStack for resource management."""
+        """Initialize the ObserverManager with an ExitStack for resource management."""
         self.exitstack: Final[ExitStack] = ExitStack()
+
+        self.observers: dict[str, Observer] = {}
 
         atexit.register(self.close)
 
@@ -47,7 +52,7 @@ class FileManager:
         Returns
         -------
         Self
-            The instance of the `FileManager`.
+            The instance of the `ObserverManager`.
         """
         return self
 
@@ -87,3 +92,33 @@ class FileManager:
             The result of the callback, typically `None` for close methods.
         """
         return self.exitstack.callback(resource)
+
+    def attach_observer(self, name: str, observer: Observer) -> None:
+        """
+        Attach an observer to the simulation.
+
+        Parameters
+        ----------
+        name : str
+            The name of the observer.
+        observer : Observer
+            The observer object to attach. Must be a subclass of `Observer`.
+        """
+        self.register(observer.close)
+        self.observers[name] = observer
+
+    def detach_observer(self, name: str, close: bool = False) -> None:
+        """
+        Detach an observer by name.
+
+        Parameters
+        ----------
+        name : str
+            The name of the observer to detach.
+        """
+        if observer := self.observers.pop(name, None):
+            if close:
+                with suppress(Exception):
+                    observer.close()
+        else:
+            warn(f"`Observer` '{name}' not found when deleting.", UserWarning, 2)

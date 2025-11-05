@@ -36,7 +36,7 @@ def test_trajectory_observer(bulk_small, tmp_path):
     assert trajectory_observer.file.name == str(Path(tmp_path, "trajectory_test.xyz"))
     assert TrajectoryObserver.accept_stream
 
-    mc.attach_observer("trajectory", trajectory_observer)
+    mc.file_manager.attach_observer("trajectory", trajectory_observer)
 
     atoms_list: list[Atoms] = []
 
