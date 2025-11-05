@@ -122,7 +122,7 @@ lint.select = [
 ]
 lint.ignore = [
   "E501",   # Line too long
-  "UP046", # Generic classes
+  "PLC0415", # Import inside function
   "A005",  # Unused built-in
   "ISC001",   # single-line-implicit-string-concatenation
   "PERF203",  # try-except-in-loop
@@ -151,7 +151,7 @@ black = true
 
 [tool.mypy]
 ignore_missing_imports = true
-namespace_packages = true
-explicit_package_bases = true
+namespace_packages = false
+explicit_package_bases = false
 no_implicit_optional = false
 disable_error_code = "annotation-unchecked"

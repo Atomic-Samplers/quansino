@@ -90,7 +90,7 @@ class CompositeMove(Generic[MoveType]):
         CompositeMove
             The composite move.
         """
-        from quansino.moves.core import BaseMove  # noqa: PLC0415
+        from quansino.moves.core import BaseMove
 
         if isinstance(other, CompositeMove):
             if type(self) is type(other):
