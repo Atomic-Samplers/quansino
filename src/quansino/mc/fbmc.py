@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, ClassVar, Final, Literal
+from typing import TYPE_CHECKING, ClassVar, Literal
 from warnings import warn
 
 import numpy as np
 from ase.units import kB
-from numpy.random import PCG64
-from numpy.random import Generator as RNG
 
-from quansino.mc.core import Driver
+from quansino.mc.driver import SingleDriver
 from quansino.utils.atoms import has_constraint
 
 if TYPE_CHECKING:
@@ -23,7 +21,7 @@ if TYPE_CHECKING:
     from quansino.type_hints import Displacements, Forces, ShapedMasses
 
 
-class ForceBias(Driver):
+class ForceBias(SingleDriver):
     """
     Force Bias Monte Carlo class to perform simulations as described in
     https://doi.org/10.1063/1.4902136.
@@ -64,17 +62,13 @@ class ForceBias(Driver):
         atoms: Atoms,
         delta: float,
         temperature: float = 298.15,
-        seed: int | None = None,
         **driver_kwargs: Any,
     ) -> None:
         """Initialize the Force Bias Monte Carlo object."""
         self.delta = delta
         self.temperature = temperature
 
-        self.__seed: Final = seed or PCG64().random_raw()
-        self._rng = RNG(PCG64(self.__seed))
-
-        super().__init__(atoms, **driver_kwargs)
+        super().__init__(atoms=atoms, **driver_kwargs)
 
         self.update_masses(atoms.get_masses())
         self.masses_scaling_power = 0.25
@@ -127,7 +121,7 @@ class ForceBias(Driver):
 
         dictionary.setdefault("kwargs", {})
         dictionary["kwargs"] = {
-            "seed": self.__seed,
+            "seed": self._seed,  # type: ignore
             "temperature": self.temperature,
             "delta": self.delta,
         }
@@ -246,6 +240,8 @@ class ForceBias(Driver):
         corrected_displacement = self.atoms.get_momenta() / self.shaped_masses
 
         self.atoms.set_positions(positions + corrected_displacement)
+
+        self.atoms.get_potential_energy()
 
         return forces
 

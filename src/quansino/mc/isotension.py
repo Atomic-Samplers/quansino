@@ -77,21 +77,12 @@ class Isotension(Isobaric[MoveType, CriteriaType], Generic[MoveType, CriteriaTyp
             pressure,
             max_cycles,
             default_displacement_move,
+            default_cell_move,
             **mc_kwargs,
         )
-
-        self.pressure = pressure
         self.external_stress = (
             np.zeros((3, 3)) if external_stress is None else external_stress
         )
-
-        if default_cell_move:
-            self.add_move(default_cell_move, name="default_cell_move")
-
-            # if self.default_logger:
-            # self.default_logger.add_field()
-
-        self.set_default_probability()
 
         if isinstance(self.context, DeformationContext):
             self.context = cast("DeformationContext", self.context)

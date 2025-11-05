@@ -3,20 +3,21 @@ from __future__ import annotations
 from io import StringIO
 
 from quansino.io.core import TextObserver
-from quansino.io.file import FileManager
+from quansino.io.file import ObserverManager
 
 
 def test_file_manager():
-    """Test the `FileManager` context manager with multiple `TextObserver` instances."""
-    observers = []
+    """Test the `ObserverManager` context manager with multiple `TextObserver` instances."""
+    observers: list[TextObserver] = []
 
-    with FileManager() as fm:
+    with ObserverManager() as fm:
         assert fm.exitstack is not None
 
         for i in range(10):
             string_io = StringIO()
             text_observer = TextObserver(string_io, interval=i)
-            text_observer.attach_simulation(fm)
+
+            fm.attach_observer(str(i), text_observer)
 
             observers.append(text_observer)
 

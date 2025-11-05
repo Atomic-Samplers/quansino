@@ -10,7 +10,7 @@ from quansino.io.core import TextObserver
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from quansino.mc.core import Driver
+    from quansino.mc.driver import Driver
 
 
 class RestartObserver(TextObserver):

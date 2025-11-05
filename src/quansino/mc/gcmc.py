@@ -219,6 +219,6 @@ class GrandCanonical(
 
         try:
             self.atoms.calc.atoms = self.atoms.copy()  # type: ignore[try-attr]
-            self.atoms.calc.results = self.last_results.copy()  # type: ignore[try-attr]
+            self.atoms.calc.results = self.context.last_results.copy()  # type: ignore[try-attr]
         except AttributeError:
             warn("`Atoms` object does not have calculator attached.", stacklevel=2)
