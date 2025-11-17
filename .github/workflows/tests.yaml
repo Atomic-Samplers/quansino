@@ -17,28 +17,23 @@ jobs:
       matrix:
         python-version: ["3.11", "3.12", "3.13"]
 
-    defaults:
-      run:
-        shell: bash -l {0}
-
     steps:
       - name: Check out repo
         uses: actions/checkout@v5
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
         with:
-          python-version: ${{ matrix.python-version }}
-          cache: pip
-          cache-dependency-path: pyproject.toml
+          enable-cache: true
 
-      - name: Install pip packages
-        run: |
-          pip install uv
-          uv pip install --system -r tests/requirements.txt .[dev]
+      - name: Set up Python
+        run: uv python install ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: uv sync --extra dev
 
       - name: Run tests with pytest
-        run: pytest --cov=quansino --cov-report=xml
+        run: uv run pytest --cov=quansino --cov-report=xml
 
       - name: Upload coverage report as artifact
         uses: actions/upload-artifact@v5
@@ -50,7 +45,6 @@ jobs:
   upload-coverage:
     needs: tests-base
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v5
