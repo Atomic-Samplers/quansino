@@ -91,15 +91,15 @@ mc.run(100)
 
 class GrandCanonicalMinimizationCriteria(GrandCanonicalCriteria):
     """
-    Acceptance criteria for Monte Carlo moves in the grand canonical (μVT) ensemble with minimization.
+    Acceptance criteria for Monte Carlo moves in the grand canonical (μVT) ensemble with
+    minimization.
 
-    This criteria extends the GrandCanonicalCriteria to include minimization of the system's energy.
+    This criteria extends the GrandCanonicalCriteria to include minimization of the
+    system's energy.
     """
 
     def __init__(self, optimizer: BFGSLineSearch, run_kwargs: dict[str, Any]) -> None:
-        """
-        Initialize the GrandCanonicalMinimizationCriteria.
-        """
+        """Initialize the GrandCanonicalMinimizationCriteria."""
         self.optimizer = optimizer
         self.run_kwargs = run_kwargs
 
@@ -135,15 +135,15 @@ mc.run(100)
 
 class FixedGrandCanonicalMinimizationCriteria(GrandCanonicalCriteria):
     """
-    Acceptance criteria for Monte Carlo moves in the grand canonical (μVT) ensemble with minimization.
+    Acceptance criteria for Monte Carlo moves in the grand canonical (μVT) ensemble with
+    minimization.
 
-    This criteria extends the GrandCanonicalCriteria to include minimization of the system's energy with fixed atoms.
+    This criteria extends the GrandCanonicalCriteria to include minimization of the
+    system's energy with fixed atoms.
     """
 
     def __init__(self, optimizer: BFGSLineSearch, run_kwargs: dict[str, Any]) -> None:
-        """
-        Initialize the GrandCanonicalMinimizationCriteria.
-        """
+        """Initialize the GrandCanonicalMinimizationCriteria."""
         self.optimizer = optimizer
         self.run_kwargs = run_kwargs
 

@@ -26,7 +26,10 @@ CriteriaType = TypeVar("CriteriaType", bound="Criteria")
 
 class Isotension(Isobaric[MoveType, CriteriaType], Generic[MoveType, CriteriaType]):
     """
-    Isobaric (NPT) Monte Carlo simulation object for performing NPT simulations. This class is a subclass of the [`Canonical`][quansino.mc.canonical.Canonical] class and provides additional functionality specific to isobaric simulations. It uses the [`DeformationContext`][quansino.mc.contexts.DeformationContext] context by default.
+    Isobaric (NPT) Monte Carlo simulation object for performing NPT simulations. This
+    class is a subclass of the [`Canonical`][quansino.mc.canonical.Canonical] class and
+    provides additional functionality specific to isobaric simulations. It uses the
+    [`DeformationContext`][quansino.mc.contexts.DeformationContext] context by default.
 
     Parameters
     ----------

@@ -10,9 +10,10 @@ class BaseIntegrator:
     """
     Abstract base class for integrators in Monte Carlo simulations.
 
-    This class defines the interface for all integrators that can be used to
-    perform operations on a simulation context. Integrators can be used to perform dynamical
-    operations such as integration of equations of motion or other time-dependent processes.
+    This class defines the interface for all integrators that can be used to perform
+    operations on a simulation context. Integrators can be used to perform dynamical
+    operations such as integration of equations of motion or other time-dependent
+    processes.
     """
 
     __slots__ = ()

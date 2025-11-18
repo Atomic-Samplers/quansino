@@ -12,22 +12,16 @@ from quansino.registry import (
 
 
 class TestClass:
-    """
-    A test class for demonstrating the registry functionality.
-    """
+    """A test class for demonstrating the registry functionality."""
 
 
 class NonExistingClass:
-    """
-    A non-existing class for testing error handling in the registry.
-    """
+    """A non-existing class for testing error handling in the registry."""
 
 
 @register()
 class TestTypedClass:
-    """
-    A test class for demonstrating the registry functionality with type checking.
-    """
+    """A test class for demonstrating the registry functionality with type checking."""
 
 
 def test_registry():

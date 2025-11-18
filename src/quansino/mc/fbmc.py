@@ -92,7 +92,8 @@ class ForceBias(SingleDriver):
 
     def calculate_gamma(self, forces: Forces) -> None:
         """
-        Calculate the gamma parameter for the Monte Carlo step, along with the denominator for the trial probability.
+        Calculate the gamma parameter for the Monte Carlo step, along with the
+        denominator for the trial probability.
 
         Parameters
         ----------
@@ -258,7 +259,8 @@ class ForceBias(SingleDriver):
 
     def calculate_trial_probability(self) -> NDArray[np.floating]:
         """
-        Calculate the trial probability for the Monte Carlo step based on the force bias.
+        Calculate the trial probability for the Monte Carlo step based on the force
+        bias.
 
         Returns
         -------
@@ -282,7 +284,11 @@ class ForceBias(SingleDriver):
 
 class AdaptiveForceBias(ForceBias):
     """
-    Adaptive Force Bias Monte Carlo class to perform simulations with adaptive delta parameter. The delta parameter is adjusted based on the variation coefficient of the forces or energies which is calculated based on the variance of the forces or energies. The current class assume that the forces or energies are calculated by a committee of MACECalculator.
+    Adaptive Force Bias Monte Carlo class to perform simulations with adaptive delta
+    parameter. The delta parameter is adjusted based on the variation coefficient of the
+    forces or energies which is calculated based on the variance of the forces or
+    energies. The current class assume that the forces or energies are calculated by a
+    committee of MACECalculator.
 
     ```python
     model_paths = ["path/to/model_0", "path/to/model_1", "path/to/model_2"]
@@ -371,7 +377,9 @@ class AdaptiveForceBias(ForceBias):
 
     def update_delta(self) -> None:
         """
-        Update the delta parameter based on the current variation coefficient. This method is called automatically during the step process.
+        Update the delta parameter based on the current variation coefficient.
+
+        This method is called automatically during the step process.
         """
         self.variation_coef = self.schemes[self.scheme](self.atoms)
 

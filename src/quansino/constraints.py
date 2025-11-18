@@ -1,4 +1,4 @@
-"""Module containing additional constraints classes"""
+"""Module containing additional constraints classes."""
 
 from __future__ import annotations
 
@@ -15,7 +15,11 @@ if TYPE_CHECKING:
 
 class FixRot(FixConstraint):
     """
-    Constraint class to remove the rotation of the system by subtracting the angular momentum from the momenta. Only to use with free boundary conditions, this constraint is not compatible with periodic boundary conditions.
+    Constraint class to remove the rotation of the system by subtracting the angular
+    momentum from the momenta.
+
+    Only to use with free boundary conditions, this constraint is not compatible with
+    periodic boundary conditions.
     """
 
     def adjust_momenta(self, atoms: Atoms, momenta: Momenta) -> None:
@@ -46,7 +50,8 @@ class FixRot(FixConstraint):
 
     def get_removed_dof(self, *_args: Any, **_kwargs: Any) -> Literal[3]:
         """
-        Get the number of degrees of freedom removed by the [`FixRot`][quansino.constraints.FixRot] constraint.
+        Get the number of degrees of freedom removed by the
+        [`FixRot`][quansino.constraints.FixRot] constraint.
 
         Returns
         -------

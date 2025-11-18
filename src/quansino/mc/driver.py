@@ -21,7 +21,10 @@ if TYPE_CHECKING:
 
 class Driver:
     """
-    Base class for managing atomistic simulations. This class provides the basic functionality for running simulations, including observer management, file I/O handling, and simulation state tracking. It is not intended to be used directly, but rather as a base class for specific simulation implementations.
+    Base class for managing atomistic simulations. This class provides the basic
+    functionality for running simulations, including observer management, file I/O
+    handling, and simulation state tracking. It is not intended to be used directly, but
+    rather as a base class for specific simulation implementations.
 
     Parameters
     ----------
@@ -117,7 +120,9 @@ class Driver:
 
     def call_observers(self) -> None:
         """
-        Call all attached observers based on their configured intervals. The observers will be called if their interval matches the current step count.
+        Call all attached observers based on their configured intervals.
+
+        The observers will be called if their interval matches the current step count.
         """
         for observer in self.file_manager.observers.values():
             interval = observer.interval
@@ -128,7 +133,10 @@ class Driver:
 
     def validate_simulation(self) -> None:
         """
-        Validate that the simulation is properly set up before running. This method can be overridden by subclasses to implement specific validation logic.
+        Validate that the simulation is properly set up before running.
+
+        This method can be overridden by subclasses to implement specific validation
+        logic.
         """
 
     def run(self, steps=100_000_000) -> None:
@@ -271,7 +279,8 @@ class Driver:
 
 class SingleDriver(Driver):
     """
-    Base class for single-drive atomistic simulations. This class extends the `Driver` class to provide additional functionality specific to single-drive simulations.
+    Base class for single-drive atomistic simulations. This class extends the `Driver`
+    class to provide additional functionality specific to single-drive simulations.
 
     Parameters
     ----------
@@ -339,7 +348,8 @@ class SingleDriver(Driver):
 
 class MultiDriver(Driver):
     """
-    Base class for multi-systems atomistic simulations. This class extends the `Driver` class to provide additional functionality specific to multi-systems simulations.
+    Base class for multi-systems atomistic simulations. This class extends the `Driver`
+    class to provide additional functionality specific to multi-systems simulations.
 
     Parameters
     ----------

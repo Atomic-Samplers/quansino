@@ -24,7 +24,10 @@ CriteriaType = TypeVar("CriteriaType", bound="Criteria")
 
 class Canonical(MonteCarlo[MoveType, CriteriaType], Generic[MoveType, CriteriaType]):
     """
-    Canonical Monte Carlo simulation object for performing NVT simulations. This class is a subclass of the [`MonteCarlo`][quansino.mc.core.MonteCarlo] class and provides additional functionality specific to canonical simulations. By default, it uses the [`DisplacementContext`][quansino.mc.contexts.DisplacementContext] context.
+    Canonical Monte Carlo simulation object for performing NVT simulations. This class
+    is a subclass of the [`MonteCarlo`][quansino.mc.core.MonteCarlo] class and provides
+    additional functionality specific to canonical simulations. By default, it uses the
+    [`DisplacementContext`][quansino.mc.contexts.DisplacementContext] context.
 
     Parameters
     ----------
@@ -109,9 +112,8 @@ class Canonical(MonteCarlo[MoveType, CriteriaType], Generic[MoveType, CriteriaTy
         self.context.temperature = temperature
 
     def validate_simulation(self) -> None:
-        """
-        Validate the simulation by checking if the last positions and last energy are set.
-        """
+        """Validate the simulation by checking if the last positions and last energy are
+        set."""
         self.context.last_positions = self.atoms.get_positions()
 
         if np.isnan(self.context.last_potential_energy):
@@ -120,9 +122,8 @@ class Canonical(MonteCarlo[MoveType, CriteriaType], Generic[MoveType, CriteriaTy
         super().validate_simulation()
 
     def revert_state(self) -> None:
-        """
-        Revert to the previously saved state of the atoms, attempting to restore the positions from the last saved state.
-        """
+        """Revert to the previously saved state of the atoms, attempting to restore the
+        positions from the last saved state."""
         super().revert_state()
 
         try:
@@ -153,7 +154,12 @@ class HamiltonianCanonical(
     Canonical[MoveType, CriteriaType], Generic[MoveType, CriteriaType]
 ):
     """
-    Hamiltonian Canonical Monte Carlo simulation object for performing NVT simulations with Hamiltonian moves. This class is a subclass of the [`Canonical`][quansino.mc.canonical.Canonical] class and provides additional functionality specific to Hamiltonian canonical simulations. By default, it uses the [`HamiltonianDisplacementContext`][quansino.mc.contexts.HamiltonianDisplacementContext] context.
+    Hamiltonian Canonical Monte Carlo simulation object for performing NVT simulations
+    with Hamiltonian moves. This class is a subclass of the
+    [`Canonical`][quansino.mc.canonical.Canonical] class and provides additional
+    functionality specific to Hamiltonian canonical simulations. By default, it uses the
+    [`HamiltonianDisplacementContext`][quansino.mc.contexts.HamiltonianDisplacementConte
+    xt] context.
 
     Parameters
     ----------

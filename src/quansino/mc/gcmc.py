@@ -25,7 +25,11 @@ class GrandCanonical(
     Canonical[MoveType, CriteriaType], Generic[MoveType, CriteriaType]
 ):
     """
-    Grand Canonical (μVT) Monte Carlo object for performing simulations in the grand canonical ensemble. This class is a subclass of the [`Canonical`][quansino.mc.canonical.Canonical] class and provides additional functionality specific to grand canonical simulations. It uses the [`ExchangeContext`][quansino.mc.contexts.ExchangeContext] context by default.
+    Grand Canonical (μVT) Monte Carlo object for performing simulations in the grand
+    canonical ensemble. This class is a subclass of the
+    [`Canonical`][quansino.mc.canonical.Canonical] class and provides additional
+    functionality specific to grand canonical simulations. It uses the
+    [`ExchangeContext`][quansino.mc.contexts.ExchangeContext] context by default.
 
     Parameters
     ----------
@@ -201,9 +205,7 @@ class GrandCanonical(
         self.context.exchange_atoms = value
 
     def save_state(self) -> None:
-        """
-        Save the current state of the context and update move labels.
-        """
+        """Save the current state of the context and update move labels."""
         for move_storage in self.moves.values():
             move_storage.move.on_atoms_changed(
                 self.context._added_indices, self.context._deleted_indices
@@ -212,9 +214,7 @@ class GrandCanonical(
         super().save_state()
 
     def revert_state(self) -> None:
-        """
-        Revert the last move made to the context.
-        """
+        """Revert the last move made to the context."""
         self.context.revert_state()
 
         try:

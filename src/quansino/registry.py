@@ -58,8 +58,7 @@ def register(class_name: str | None = None) -> Callable[[type], type]:
 
     def decorator(cls: type) -> type:
         """
-        Decorator function to register a class with a name
-        when the class is defined.
+        Decorator function to register a class with a name when the class is defined.
 
         Parameters
         ----------

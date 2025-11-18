@@ -19,7 +19,15 @@ if TYPE_CHECKING:
 
 class Context:
     """
-    Abstract base class for Monte Carlo contexts. Contexts define the interface between the simulation object, the moves and their criteria. They aim to provide the necessary information for the move to perform its operation, without having to pass whole simulation objects around. Specific context might be required for different types of moves, for example, [`DisplacementContext`][quansino.mc.contexts.DisplacementContext] for displacement moves, [`DeformationContext`][quansino.mc.contexts.DeformationContext] for cell deformation move, and [`ExchangeContext`][quansino.mc.contexts.ExchangeContext] for exchange moves.
+    Abstract base class for Monte Carlo contexts. Contexts define the interface between
+    the simulation object, the moves and their criteria. They aim to provide the
+    necessary information for the move to perform its operation, without having to pass
+    whole simulation objects around. Specific context might be required for different
+    types of moves, for example,
+    [`DisplacementContext`][quansino.mc.contexts.DisplacementContext] for displacement
+    moves, [`DeformationContext`][quansino.mc.contexts.DeformationContext] for cell
+    deformation move, and [`ExchangeContext`][quansino.mc.contexts.ExchangeContext] for
+    exchange moves.
 
     Parameters
     ----------
@@ -47,7 +55,9 @@ class Context:
 
     def save_state(self) -> None:
         """
-        Save the current state of the context. This method can be overridden by subclasses to save specific attributes.
+        Save the current state of the context.
+
+        This method can be overridden by subclasses to save specific attributes.
         """
         try:
             self.last_results = self.atoms.calc.results  # type: ignore[try-attr]
@@ -61,7 +71,9 @@ class Context:
 
     def revert_state(self) -> None:
         """
-        Revert the context to the last saved state. This method can be overridden by subclasses to revert specific attributes.
+        Revert the context to the last saved state.
+
+        This method can be overridden by subclasses to revert specific attributes.
         """
         try:
             self.atoms.calc.results = self.last_results  # type: ignore[try-attr]
@@ -130,7 +142,8 @@ class DisplacementContext(Context):
         self._moving_indices: IntegerArray = []
 
     def save_state(self) -> None:
-        """Save the current state of the context, including the last positions and energy."""
+        """Save the current state of the context, including the last positions and
+        energy."""
         self.last_positions = self.atoms.get_positions()
         self.last_potential_energy = self.atoms.get_potential_energy()
 
@@ -170,18 +183,16 @@ class HamiltonianContext(Context):
         self.last_kinetic_energy: float = np.nan
 
     def save_state(self) -> None:
-        """
-        Save the current state of the context, including the last momenta and kinetic energy.
-        """
+        """Save the current state of the context, including the last momenta and kinetic
+        energy."""
         self.last_momenta = self.atoms.get_momenta()
         self.last_kinetic_energy = self.atoms.get_kinetic_energy()  # type: ignore[ase]
 
         super().save_state()
 
     def revert_state(self) -> None:
-        """
-        Revert the context to the last saved state, restoring the last momenta and kinetic energy.
-        """
+        """Revert the context to the last saved state, restoring the last momenta and
+        kinetic energy."""
         self.atoms.set_array("momenta", self.last_momenta.copy(), float, (3,))
 
         super().revert_state()
@@ -237,16 +248,12 @@ class DeformationContext(DisplacementContext):
         self.last_cell: Cell = atoms.get_cell()
 
     def save_state(self) -> None:
-        """
-        Save the current state of the context, including the last cell.
-        """
+        """Save the current state of the context, including the last cell."""
         super().save_state()
         self.last_cell = self.atoms.get_cell()
 
     def revert_state(self) -> None:
-        """
-        Revert the context to the last saved state, restoring the last cell.
-        """
+        """Revert the context to the last saved state, restoring the last cell."""
         super().revert_state()
         self.atoms.set_cell(self.last_cell, scale_atoms=False)
 
@@ -330,9 +337,7 @@ class ExchangeContext(DisplacementContext):
         self.reset()
 
     def reset(self) -> None:
-        """
-        Reset the context by setting all attributes to their default values.
-        """
+        """Reset the context by setting all attributes to their default values."""
         self._added_indices: IntegerArray = []
         self._added_atoms: Atoms = Atoms()
         self._deleted_indices: IntegerArray = []
@@ -343,9 +348,7 @@ class ExchangeContext(DisplacementContext):
         super().reset()
 
     def revert_state(self) -> None:
-        """
-        Revert the context to the last saved state.
-        """
+        """Revert the context to the last saved state."""
         if len(self._added_indices) != 0:
             del self.atoms[self._added_indices]
         if len(self._deleted_indices) != 0:
@@ -358,9 +361,8 @@ class ExchangeContext(DisplacementContext):
         self.reset()
 
     def save_state(self) -> None:
-        """
-        Save the current state of the context, including the number of exchange particles.
-        """
+        """Save the current state of the context, including the number of exchange
+        particles."""
         super().save_state()
         self.number_of_exchange_particles += self.particle_delta
         self.reset()

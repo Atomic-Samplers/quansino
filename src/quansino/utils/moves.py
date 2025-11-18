@@ -66,8 +66,8 @@ class MoveStorage(Generic[MoveType, CriteriaType]):
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> Self:
         """
-        Load the MoveStorage object from a dictionary.
-        This method is used to restore the state of the MoveStorage object from a saved state.
+        Load the MoveStorage object from a dictionary. This method is used to restore
+        the state of the MoveStorage object from a saved state.
 
         Parameters
         ----------

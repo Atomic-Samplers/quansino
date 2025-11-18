@@ -27,7 +27,7 @@ requires-python = ">=3.11"
 dependencies = ["numpy>=1.19.5", "ase>=3.24.0", "networkx>=3.4.2"]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.4.0", "pytest-cov>=3.0.0", "ruff>=0.0.285"]
+dev = ["pytest>=7.4.0", "pytest-cov>=3.0.0", "ruff", "black", "docformatter", "pyright"]
 docs = [
     "mkdocs-material>=9.4.0",
     "mkdocstrings[python]>=0.22.0",
@@ -51,24 +51,23 @@ exclude = ["**/__pycache__"]
 
 [tool.pytest.ini_options]
 minversion = "6.0"
-addopts = ["-p no:warnings", "--import-mode=importlib"]
-xfail_strict = true
-log_cli_level = "warn"
 pythonpath = "src"
 testpaths = ["tests"]
+addopts = ["-p no:warnings", "--import-mode=importlib"]
+xfail_strict = true
 
 [tool.black]
-exclude = '''
+extend-exclude = '''
 /(
-    \.git
-  | \.tox
+  \.venv
+  \.git
+  | venv
+  | \.egg-info
+  | build
+  | dist
 )/
 '''
 skip-magic-trailing-comma = true
-
-[tool.isort]
-profile = 'black'
-skip_gitignore = true
 
 [tool.coverage.run]
 source = ["src"]
@@ -81,6 +80,7 @@ exclude_also = [
 ]
 
 [tool.ruff]
+src = ["src"]
 lint.select = [
   "A",      # flake8-builtins
   "ARG",    # flake8-unused-arguments
@@ -131,7 +131,6 @@ lint.ignore = [
   "PT012",  # pytest.raises
   "RET505", # Unnecessary `elif` after `return`
 ]
-src = ["src"]
 lint.unfixable = [
   "T20",  # Removes print statements
   "F841", # Removes unused variables
@@ -148,10 +147,3 @@ extend-include = ["*.ipynb"]
 [tool.docformatter]
 pre-summary-newline = true
 black = true
-
-[tool.mypy]
-ignore_missing_imports = true
-namespace_packages = false
-explicit_package_bases = false
-no_implicit_optional = false
-disable_error_code = "annotation-unchecked"
