@@ -27,7 +27,9 @@ class TrajectoryObserver(TextObserver):
         **observer_kwargs: Any,
     ) -> None:
         """
-        Initialize the `TrajectoryObserver` with mode, and other parameters. In `quansino`, trajectory files are written in the XYZ format using ASE's `write_xyz` function.
+        Initialize the `TrajectoryObserver` with mode, and other parameters. In
+        `quansino`, trajectory files are written in the XYZ format using ASE's
+        `write_xyz` function.
 
         Parameters
         ----------

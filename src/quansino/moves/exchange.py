@@ -25,7 +25,9 @@ class ExchangeMove(
     DisplacementMove[OperationType, ContextType], Generic[OperationType, ContextType]
 ):
     """
-    Class for atomic/molecular exchange moves that exchanges atom(s). The class will either add `exchange_atoms` in the unit cell or delete a (group) of atom(s) present in `labels`.
+    Class for atomic/molecular exchange moves that exchanges atom(s). The class will
+    either add `exchange_atoms` in the unit cell or delete a (group) of atom(s) present
+    in `labels`.
 
     For addition, the move uses the `attempt_move` method in the parent [`DisplacementMove`][quansino.moves.displacement.DisplacementMove] class with the provided [`operation`][quansino.operations.core.Operation] (Translation by default for single atoms, TranslationRotation for multiple atoms).
 
@@ -85,7 +87,8 @@ class ExchangeMove(
 
     def attempt_addition(self, context: ContextType) -> IntegerArray:
         """
-        Attempt to add atoms to the simulation. If `to_add_atoms` is not set, it will use the `exchange_atoms` from the context.
+        Attempt to add atoms to the simulation. If `to_add_atoms` is not set, it will
+        use the `exchange_atoms` from the context.
 
         Returns
         -------
@@ -107,7 +110,8 @@ class ExchangeMove(
 
     def attempt_deletion(self, context: ContextType) -> IntegerArray:
         """
-        Attempt to delete atoms from the simulation. If `to_delete_label` is not set, it will randomly select a label from the unique labels of the context.
+        Attempt to delete atoms from the simulation. If `to_delete_label` is not set, it
+        will randomly select a label from the unique labels of the context.
 
         Returns
         -------
@@ -173,7 +177,8 @@ class ExchangeMove(
 
     def register_success(self) -> Literal[True]:
         """
-        Register a successful exchange move, in which case all information is retained except the prior move attributes.
+        Register a successful exchange move, in which case all information is retained
+        except the prior move attributes.
 
         Returns
         -------
@@ -199,7 +204,8 @@ class ExchangeMove(
 
     def register_failure(self) -> Literal[False]:
         """
-        Register a failed exchange move, in which case all information is retained except the prior move attributes.
+        Register a failed exchange move, in which case all information is retained
+        except the prior move attributes.
 
         Returns
         -------

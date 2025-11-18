@@ -34,7 +34,15 @@ CriteriaType = TypeVar("CriteriaType", bound="Criteria")
 
 class MonteCarlo(SingleDriver, Generic[MoveType, CriteriaType]):
     """
-    Base class providing an interface for all Monte Carlo classes. The `MonteCarlo` class is responsible for selecting moves to perform via the [`yield_moves`][quansino.mc.core.MonteCarlo.yield_moves] method. This class is also responsible for managing the moves, their parameters (interval, probability, minimum count), and their acceptance criteria. Logging and trajectory writing are handled by the parent [`Driver`][quansino.mc.driver.Driver] class. When necessary, communication between the Monte Carlo simulation and the moves is facilitated by the context object. The Monte Carlo class and its subclasses should not directly modify the moves, but rather interact using the context object.
+    Base class providing an interface for all Monte Carlo classes. The `MonteCarlo`
+    class is responsible for selecting moves to perform via the
+    [`yield_moves`][quansino.mc.core.MonteCarlo.yield_moves] method. This class is also
+    responsible for managing the moves, their parameters (interval, probability, minimum
+    count), and their acceptance criteria. Logging and trajectory writing are handled by
+    the parent [`Driver`][quansino.mc.driver.Driver] class. When necessary,
+    communication between the Monte Carlo simulation and the moves is facilitated by the
+    context object. The Monte Carlo class and its subclasses should not directly modify
+    the moves, but rather interact using the context object.
 
     Parameters
     ----------
@@ -197,7 +205,10 @@ class MonteCarlo(SingleDriver, Generic[MoveType, CriteriaType]):
 
     def validate_simulation(self) -> None:
         """
-        Validate the simulation setup. Checks that moves have been added to the Monte Carlo simulation and that the Atoms object has a calculator with results.
+        Validate the simulation setup.
+
+        Checks that moves have been added to the Monte Carlo simulation and that the
+        Atoms object has a calculator with results.
         """
         if len(self.moves) == 0:
             warn(
@@ -299,7 +310,11 @@ class MonteCarlo(SingleDriver, Generic[MoveType, CriteriaType]):
 
     def yield_moves(self) -> Generator[str, None, None]:
         """
-        Yield moves to be performed given the move configured. The moves are selected based on their probability, and their interval. Forced moves are introduced based on their minimum count. Moves are yielded separately, re-constructing the move_probabilities array each time, allowing for a dynamic change in the probability of moves between moves.
+        Yield moves to be performed given the move configured. The moves are selected
+        based on their probability, and their interval. Forced moves are introduced
+        based on their minimum count. Moves are yielded separately, re-constructing the
+        move_probabilities array each time, allowing for a dynamic change in the
+        probability of moves between moves.
 
         Yields
         ------
@@ -370,13 +385,17 @@ class MonteCarlo(SingleDriver, Generic[MoveType, CriteriaType]):
 
     def save_state(self) -> None:
         """
-        Save the current state of the simulation. This method is called when a move is accepted.
+        Save the current state of the simulation.
+
+        This method is called when a move is accepted.
         """
         self.context.save_state()
 
     def revert_state(self) -> None:
         """
-        Revert the last move made by the simulation. This method is called when a move is rejected.
+        Revert the last move made by the simulation.
+
+        This method is called when a move is rejected.
         """
         self.context.revert_state()
 

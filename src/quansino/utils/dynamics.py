@@ -14,7 +14,8 @@ def maxwell_boltzmann_distribution(
     context: DisplacementContext, forced: bool = False
 ) -> None:
     """
-    Set the momenta of the atoms in the context according to the Maxwell-Boltzmann distribution at the specified temperature.
+    Set the momenta of the atoms in the context according to the Maxwell-Boltzmann
+    distribution at the specified temperature.
 
     Parameters
     ----------

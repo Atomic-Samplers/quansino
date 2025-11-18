@@ -17,7 +17,8 @@ if TYPE_CHECKING:
 
 class DeformationOperation(BaseOperation):
     """
-    Base class for deformation operations that may modify the simulation cell or atoms' positions.
+    Base class for deformation operations that may modify the simulation cell or atoms'
+    positions.
 
     Parameters
     ----------
@@ -54,9 +55,13 @@ class DeformationOperation(BaseOperation):
 
 class AnisotropicDeformation(DeformationOperation):
     """
-    Class for anisotropic deformation operation that can deform the cell differently along each axis.
+    Class for anisotropic deformation operation that can deform the cell differently
+    along each axis.
 
-    This operation applies a deformation tensor with randomly generated components to the simulation cell. The tensor is constructed using exponential mapping to ensure that the resulting deformation is positive definite. If max_value is large, the true maximum component values may exceed it, use with caution.
+    This operation applies a deformation tensor with randomly generated components to
+    the simulation cell. The tensor is constructed using exponential mapping to ensure
+    that the resulting deformation is positive definite. If max_value is large, the true
+    maximum component values may exceed it, use with caution.
     """
 
     def calculate(self, context: Context) -> Deformation:
@@ -93,10 +98,13 @@ class AnisotropicDeformation(DeformationOperation):
 
 class ShapeDeformation(DeformationOperation):
     """
-    Class for anisotropic deformation operations that can deform the cell differently along each axis.
+    Class for anisotropic deformation operations that can deform the cell differently
+    along each axis.
 
-    This operation applies a deformation tensor with randomly generated components to the simulation cell.
-    The tensor is constructed using exponential mapping to ensure that the resulting deformation is positive definite. If max_value is large, the true maximum component values may exceed it, use with caution.
+    This operation applies a deformation tensor with randomly generated components to
+    the simulation cell. The tensor is constructed using exponential mapping to ensure
+    that the resulting deformation is positive definite. If max_value is large, the true
+    maximum component values may exceed it, use with caution.
     """
 
     def calculate(self, context: Context) -> Deformation:
@@ -135,9 +143,11 @@ class ShapeDeformation(DeformationOperation):
 
 class IsotropicDeformation(DeformationOperation):
     """
-    Class for isotropic deformation operations that stretch or compress the cell equally in all directions.
+    Class for isotropic deformation operations that stretch or compress the cell equally
+    in all directions.
 
-    This operation applies the same deformation value to all diagonal components of the deformation tensor, resulting in uniform scaling of the simulation cell.
+    This operation applies the same deformation value to all diagonal components of the
+    deformation tensor, resulting in uniform scaling of the simulation cell.
     """
 
     def calculate(self, context: Context) -> Deformation:

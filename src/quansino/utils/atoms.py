@@ -91,7 +91,9 @@ def search_molecules(
 
 def reinsert_atoms(atoms: Atoms, new_atoms: Atoms, indices: IntegerArray) -> None:
     """
-    Reinsert atoms into an Atoms object, in place. This differs from pure insertion in that it assumes that `new_atoms` were previously removed from `atoms` at their old `indices`.
+    Reinsert atoms into an Atoms object, in place. This differs from pure insertion in
+    that it assumes that `new_atoms` were previously removed from `atoms` at their old
+    `indices`.
 
     Parameters
     ----------

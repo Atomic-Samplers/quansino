@@ -26,7 +26,16 @@ if TYPE_CHECKING:
 
 class Logger(TextObserver):
     """
-    A general purpose logger for atomistic simulations, if created manually, the [`add_field`][quansino.io.logger.Logger.add_field] method must be called to configure fields to log. The logger will write the current values of all configured fields to the log file at specified intervals. Callable required for [`add_field`][quansino.io.logger.Logger.add_field] can be easily created by calling functions to obtain the desired value. The logger can also be configured using convenience methods, such as [`add_mc_fields`][quansino.io.logger.Logger.add_mc_fields] and [`add_opt_fields`][quansino.io.logger.Logger.add_opt_fields]. This will be done automatically by Monte Carlo classes if the `logfile` parameter is set.
+    A general purpose logger for atomistic simulations, if created manually, the
+    [`add_field`][quansino.io.logger.Logger.add_field] method must be called to
+    configure fields to log. The logger will write the current values of all configured
+    fields to the log file at specified intervals. Callable required for
+    [`add_field`][quansino.io.logger.Logger.add_field] can be easily created by calling
+    functions to obtain the desired value. The logger can also be configured using
+    convenience methods, such as
+    [`add_mc_fields`][quansino.io.logger.Logger.add_mc_fields] and
+    [`add_opt_fields`][quansino.io.logger.Logger.add_opt_fields]. This will be done
+    automatically by Monte Carlo classes if the `logfile` parameter is set.
 
     Example
     -------
@@ -79,7 +88,10 @@ class Logger(TextObserver):
 
     def __call__(self) -> None:
         """
-        Log the current state of the simulation. Writes a new line to the log file containing the current values of all configured fields.
+        Log the current state of the simulation.
+
+        Writes a new line to the log file containing the current values of all
+        configured fields.
         """
         parts = []
 
@@ -123,7 +135,8 @@ class Logger(TextObserver):
         is_array: bool = False,
     ) -> None:
         """
-        Add one field to the logger, which track a value that changes during the simulation.
+        Add one field to the logger, which track a value that changes during the
+        simulation.
 
         Parameters
         ----------
@@ -168,7 +181,9 @@ class Logger(TextObserver):
 
     def add_mc_fields(self, simulation: Driver) -> None:
         """
-        Convenience function to add commonly used fields for [`MonteCarlo`][quansino.mc.core.MonteCarlo] simulations, add the following fields to the logger:
+        Convenience function to add commonly used fields for
+        [`MonteCarlo`][quansino.mc.core.MonteCarlo] simulations, add the following
+        fields to the logger:
 
         - Class: The name of the simulation class.
         - Step: The current simulation step.
@@ -194,7 +209,8 @@ class Logger(TextObserver):
 
     def add_md_fields(self, simulation: MolecularDynamics) -> None:
         """
-        Convenience function to add commonly used fields for `MolecularDynamics` simulations, add the following fields to the logger:
+        Convenience function to add commonly used fields for `MolecularDynamics`
+        simulations, add the following fields to the logger:
 
         - Time[ps]: The current simulation time in picoseconds.
         - Epot[eV]: The current potential energy.
@@ -222,7 +238,8 @@ class Logger(TextObserver):
 
     def add_opt_fields(self, simulation: Optimizer) -> None:
         """
-        Convenience function to add commonly used fields for `Optimizer` simulations, add the following fields to the logger:
+        Convenience function to add commonly used fields for `Optimizer` simulations,
+        add the following fields to the logger:
 
         - Optimizer: The name of the optimizer class.
         - Step: The current optimization step.
@@ -257,7 +274,8 @@ class Logger(TextObserver):
         mask: list[bool] | None = None,
     ) -> None:
         """
-        Add stress fields to the logger for all components of the stress tensor. These can be masked using the `mask` parameter.
+        Add stress fields to the logger for all components of the stress tensor. These
+        can be masked using the `mask` parameter.
 
         Parameters
         ----------

@@ -70,7 +70,8 @@ class Box(DisplacementOperation):
 
 class Sphere(DisplacementOperation):
     """
-    Class for a spherical displacement operation that places atoms on the surface of a sphere.
+    Class for a spherical displacement operation that places atoms on the surface of a
+    sphere.
 
     This operation generates displacements where atoms are placed exactly at a distance
     equal to step_size from the origin, creating a spherical shell pattern.

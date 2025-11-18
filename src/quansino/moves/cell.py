@@ -56,7 +56,9 @@ class CellMove(
 
     def attempt_deformation(self, context: ContextType) -> bool:
         """
-        Attempt to move the atoms using the provided operation and check. The move is attempted `max_attempts` number of times. If the move is successful, return True, otherwise, return False.
+        Attempt to move the atoms using the provided operation and check. The move is
+        attempted `max_attempts` number of times. If the move is successful, return
+        True, otherwise, return False.
 
         Parameters
         ----------

@@ -31,7 +31,11 @@ class DisplacementMove(
     BaseMove[OperationType, ContextType], Generic[OperationType, ContextType]
 ):
     """
-    Class for displacement moves that displaces one atom or a group of atoms. The class will use an [`Operation`][quansino.operations.core.Operation]. The class uses the `labels` attribute to determine which atoms can be displaced, if none, the move fails. If multiple atoms share the same label, they are considered to be part of the same group (molecule) and will be displaced together in a consistent manner.
+    Class for displacement moves that displaces one atom or a group of atoms. The class
+    will use an [`Operation`][quansino.operations.core.Operation]. The class uses the
+    `labels` attribute to determine which atoms can be displaced, if none, the move
+    fails. If multiple atoms share the same label, they are considered to be part of the
+    same group (molecule) and will be displaced together in a consistent manner.
 
     Move that displaces multiple labels at once can be created by adding multiple [`DisplacementMove`][quansino.moves.displacement.DisplacementMove] objects together. Similarly, a move can be multiplied by an integer to move multiple labels at once in the same manner. In this case a [`CompositeDisplacementMove`][quansino.moves.displacement.CompositeDisplacementMove] object is returned, which can be used as a normal DisplacementMove object.
 
@@ -80,7 +84,8 @@ class DisplacementMove(
         operation: OperationType | None = None,
         apply_constraints: bool = True,
     ) -> None:
-        """Initialize the DisplacementMove object.
+        """
+        Initialize the DisplacementMove object.
 
         Parameters
         ----------
@@ -103,7 +108,9 @@ class DisplacementMove(
 
     def attempt_displacement(self, context: ContextType) -> bool:
         """
-        Attempt to move the atoms using the provided operation and check. The move is attempted `max_attempts` number of times. If the move is successful, return True, otherwise, return False.
+        Attempt to move the atoms using the provided operation and check. The move is
+        attempted `max_attempts` number of times. If the move is successful, return
+        True, otherwise, return False.
 
         Parameters
         ----------
@@ -165,7 +172,8 @@ class DisplacementMove(
 
     def set_labels(self, new_labels: IntegerArray) -> None:
         """
-        Set the labels of the atoms to displace and update the unique labels. This function should always be used to set the labels.
+        Set the labels of the atoms to displace and update the unique labels. This
+        function should always be used to set the labels.
 
         Parameters
         ----------
@@ -268,7 +276,10 @@ class HamiltonianDisplacementMove(
     BaseMove[IntegratorType, HContextType], Generic[IntegratorType, HContextType]
 ):
     """
-    Class for Hamiltonian displacement moves that displaces atoms using a Hamiltonian integrator. The class uses the `distribution` attribute to sample momenta from a distribution before attempting the move. The class will use an [`Integrator`][quansino.integrators.core.Integrator] to perform the move.
+    Class for Hamiltonian displacement moves that displaces atoms using a Hamiltonian
+    integrator. The class uses the `distribution` attribute to sample momenta from a
+    distribution before attempting the move. The class will use an
+    [`Integrator`][quansino.integrators.core.Integrator] to perform the move.
 
     Parameters
     ----------
@@ -297,7 +308,9 @@ class HamiltonianDisplacementMove(
         self, context: HContextType, sample_momenta: bool = True
     ) -> bool:
         """
-        Attempt to move the atoms using the provided integrator and check against `check_move`. The move is attempted `max_attempts` number of times. If the move is successful, return True, otherwise, return False.
+        Attempt to move the atoms using the provided integrator and check against
+        `check_move`. The move is attempted `max_attempts` number of times. If the move
+        is successful, return True, otherwise, return False.
 
         Parameters
         ----------
@@ -349,7 +362,9 @@ class HamiltonianDisplacementMove(
 
 class CompositeDisplacementMove(CompositeMove[DisplacementMove]):
     """
-    Class to perform a composite displacement operation on atoms. This class is returned when adding or multiplying [`DisplacementMove`][quansino.moves.displacement.DisplacementMove] objects together.
+    Class to perform a composite displacement operation on atoms. This class is returned
+    when adding or multiplying
+    [`DisplacementMove`][quansino.moves.displacement.DisplacementMove] objects together.
 
     Parameters
     ----------

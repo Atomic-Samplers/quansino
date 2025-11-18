@@ -19,13 +19,17 @@ if TYPE_CHECKING:
 
 class BaseCriteria(ABC):
     """
-    Base class for acceptance criteria, it defines the interface for acceptance criteria used in simulations. Implementations must provide an `evaluate` method that determines whether a move is accepted or rejected.
+    Base class for acceptance criteria, it defines the interface for acceptance criteria
+    used in simulations.
+
+    Implementations must provide an `evaluate` method that determines whether a move is accepted or rejected.
     """
 
     @abstractmethod
     def evaluate(self, context: Context, *args, **kwargs) -> bool:
         """
-        Evaluate whether a Monte Carlo move should be accepted. This method should be implemented in subclasses.
+        Evaluate whether a Monte Carlo move should be accepted. This method should be
+        implemented in subclasses.
 
         Parameters
         ----------
@@ -79,9 +83,8 @@ class BaseCriteria(ABC):
 
 
 class CanonicalCriteria(BaseCriteria):
-    """
-    Acceptance criteria for Monte Carlo simulation in the canonical (NVT) ensemble.
-    """
+    """Acceptance criteria for Monte Carlo simulation in the canonical (NVT)
+    ensemble."""
 
     @staticmethod
     def evaluate(context: DisplacementContext) -> bool:
@@ -108,9 +111,8 @@ class CanonicalCriteria(BaseCriteria):
 
 
 class HamiltonianCanonicalCriteria(BaseCriteria):
-    """
-    Acceptance criteria for hybrid Monte Carlo simulation in the canonical (NVT) ensemble.
-    """
+    """Acceptance criteria for hybrid Monte Carlo simulation in the canonical (NVT)
+    ensemble."""
 
     @staticmethod
     def evaluate(context: HamiltonianDisplacementContext) -> bool:
@@ -139,9 +141,7 @@ class HamiltonianCanonicalCriteria(BaseCriteria):
 
 
 class IsobaricCriteria(BaseCriteria):
-    """
-    Acceptance criteria for moves in the isothermal-isobaric (NPT) ensemble.
-    """
+    """Acceptance criteria for moves in the isothermal-isobaric (NPT) ensemble."""
 
     @staticmethod
     def evaluate(context: DeformationContext) -> bool:
@@ -173,9 +173,7 @@ class IsobaricCriteria(BaseCriteria):
 
 
 class IsotensionCriteria(BaseCriteria):
-    """
-    Acceptance criteria for moves in the isothermal-isotension (NST) ensemble.
-    """
+    """Acceptance criteria for moves in the isothermal-isotension (NST) ensemble."""
 
     def evaluate(self, context: DeformationContext) -> bool:
         """
@@ -222,9 +220,8 @@ class IsotensionCriteria(BaseCriteria):
 
 
 class GrandCanonicalCriteria(BaseCriteria):
-    """
-    Acceptance criteria for Monte Carlo moves in the grand canonical (μVT) ensemble.
-    """
+    """Acceptance criteria for Monte Carlo moves in the grand canonical (μVT)
+    ensemble."""
 
     def evaluate(self, context: ExchangeContext) -> bool:
         """

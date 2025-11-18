@@ -23,7 +23,10 @@ CriteriaType = TypeVar("CriteriaType", bound="Criteria")
 
 class Isobaric(Canonical[MoveType, CriteriaType], Generic[MoveType, CriteriaType]):
     """
-    Isobaric (NPT) Monte Carlo simulation object for performing NPT simulations. This class is a subclass of the [`Canonical`][quansino.mc.canonical.Canonical] class and provides additional functionality specific to isobaric simulations. It uses the [`DeformationContext`][quansino.mc.contexts.DeformationContext] context by default.
+    Isobaric (NPT) Monte Carlo simulation object for performing NPT simulations. This
+    class is a subclass of the [`Canonical`][quansino.mc.canonical.Canonical] class and
+    provides additional functionality specific to isobaric simulations. It uses the
+    [`DeformationContext`][quansino.mc.contexts.DeformationContext] context by default.
 
     Parameters
     ----------
@@ -115,7 +118,8 @@ class Isobaric(Canonical[MoveType, CriteriaType], Generic[MoveType, CriteriaType
         """
         Set the default probability for the cell and displacement moves.
 
-        The probability for cell moves is set to 1/(N+1) and the probability for displacement moves is set to 1/(1+1/N), where N is the number of atoms.
+        The probability for cell moves is set to 1/(N+1) and the probability for
+        displacement moves is set to 1/(1+1/N), where N is the number of atoms.
         """
         if cell_move := self.moves.get("default_cell_move"):
             cell_move.probability = 1 / (len(self.atoms) + 1)
@@ -123,16 +127,17 @@ class Isobaric(Canonical[MoveType, CriteriaType], Generic[MoveType, CriteriaType
             displacement_move.probability = 1 / (1 + 1 / len(self.atoms))
 
     def validate_simulation(self) -> None:
-        """
-        This method also ensures that the cell is saved in the context.
-        """
+        """This method also ensures that the cell is saved in the context."""
         self.context.last_cell = self.atoms.get_cell()
 
         super().validate_simulation()
 
     def revert_state(self) -> None:
         """
-        Revert to the previously saved state and undo the last move. This method restores the cell state in addition to the state restored by the parent class.
+        Revert to the previously saved state and undo the last move.
+
+        This method restores the cell state in addition to the state restored by the
+        parent class.
         """
         super().revert_state()
 

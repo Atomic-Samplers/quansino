@@ -7,7 +7,8 @@ from quansino.io.file import ObserverManager
 
 
 def test_file_manager():
-    """Test the `ObserverManager` context manager with multiple `TextObserver` instances."""
+    """Test the `ObserverManager` context manager with multiple `TextObserver`
+    instances."""
     observers: list[TextObserver] = []
 
     with ObserverManager() as fm:

@@ -13,7 +13,10 @@ if TYPE_CHECKING:
 
 class ObserverManager:
     """
-    Class to automatically manage file resources. This class uses an [`ExitStack`][contextlib.ExitStack] object to register file resources that need to be closed when the program exits or when the context manager is exited. It can be used to ensure that files are properly closed, preventing resource leaks.
+    Class to automatically manage file resources. This class uses an
+    [`ExitStack`][contextlib.ExitStack] object to register file resources that need to
+    be closed when the program exits or when the context manager is exited. It can be
+    used to ensure that files are properly closed, preventing resource leaks.
 
     Attributes
     ----------
@@ -72,14 +75,17 @@ class ObserverManager:
     __del__ = __exit__
 
     def close(self) -> None:
-        """Close all registered resources"""
+        """Close all registered resources."""
         with suppress(OSError, AttributeError, ValueError):
             self.exitstack.close()
             atexit.unregister(self.close)
 
     def register(self, resource: Callable) -> Any:
         """
-        Register a resource for automatic cleanup. This method registers a callable resource (like a file close method) to be called when the context manager exits or when the program terminates. It returns the result of the callback, which is typically `None` for close methods.
+        Register a resource for automatic cleanup. This method registers a callable
+        resource (like a file close method) to be called when the context manager exits
+        or when the program terminates. It returns the result of the callback, which is
+        typically `None` for close methods.
 
         Parameters
         ----------
