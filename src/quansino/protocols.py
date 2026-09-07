@@ -60,7 +60,14 @@ class Criteria(Serializable, Protocol, Generic[ContextType]):
     Base protocol for all criteria in [`MonteCarlo`][quansino.mc.core.MonteCarlo]
     simulations.
 
-    Criteria are used to evaluate whether a move is acceptable based on the current state of the system. Criteria classes should implement the [`evaluate`][quansino.protocols.Criteria.evaluate] method to perform the evaluation and return a boolean indicating whether the criteria are met. Such method take a simulation [`Context`][quansino.mc.contexts.Context] as parameter, which provides the necessary information about the current state of the system, such as atom positions, cell parameters, as well as any additional information needed to perform the evaluation.
+    Criteria are used to evaluate whether a move is acceptable based on the current
+    state of the system. Criteria classes should implement the
+    [`evaluate`][quansino.protocols.Criteria.evaluate] method to perform the evaluation
+    and return a boolean indicating whether the criteria are met. Such method take a
+    simulation [`Context`][quansino.mc.contexts.Context] as parameter, which provides
+    the necessary information about the current state of the system, such as atom
+    positions, cell parameters, as well as any additional information needed to perform
+    the evaluation.
     """
 
     def evaluate(self, context: ContextType) -> bool:
@@ -86,13 +93,20 @@ class Move(Serializable, Protocol, Generic[ContextType]):
     Base protocol for all acceptable moves in
     [`MonteCarlo`][quansino.mc.core.MonteCarlo] simulations.
 
-    Moves perform specific tasks such as displacing atoms, deforming cells, or exchanging atoms. Move classes should implement the [`__call__`][quansino.protocols.Move.__call__] method to perform the move and return whether it was successful. Such method take a simulation [`Context`][quansino.mc.contexts.Context] as parameter, which provides the necessary information about the current state of the system, such as atom positions, cell parameters, as well as any additional information needed to perform the move.
+    Moves perform specific tasks such as displacing atoms, deforming cells, or
+    exchanging atoms. Move classes should implement the
+    [`__call__`][quansino.protocols.Move.__call__] method to perform the move and return
+    whether it was successful. Such method take a simulation
+    [`Context`][quansino.mc.contexts.Context] as parameter, which provides the necessary
+    information about the current state of the system, such as atom positions, cell
+    parameters, as well as any additional information needed to perform the move.
     """
 
     def __call__(self, context: ContextType) -> bool:
         """
-        Perform the move, i.e. displace, deform cells, or exchange atoms, in place. This
-        method should be implemented in user defined classes, and should return a
+        Perform the move, i.e. displace, deform cells, or exchange atoms, in place.
+
+        This method should be implemented in user defined classes, and should return a
         boolean indicating whether the attempted operation was successful. Users are
         free to implement their own contraints and logic for what constitutes a
         successful move. Criteria for success can include whether the move results in a
@@ -111,8 +125,9 @@ class Move(Serializable, Protocol, Generic[ContextType]):
         self, added_indices: IntegerArray, removed_indices: IntegerArray
     ) -> None:
         """
-        Function to run when atoms are added or removed from the simulation. This method
-        should be implemented in user defined move classes to update the move's internal
+        Function to run when atoms are added or removed from the simulation.
+
+        This method should be implemented in user defined move classes to update the move's internal
         state based on the changes in atoms.
 
         Parameters
@@ -126,8 +141,9 @@ class Move(Serializable, Protocol, Generic[ContextType]):
 
     def on_cell_changed(self, new_cell: Cell) -> None:
         """
-        Function to run when the cell changes. This method should be implemented in user
-        defined move classes to update the move's internal state based on the new cell.
+        Function to run when the cell changes.
+
+        This method should be implemented in user defined move classes to update the move's internal state based on the new cell.
 
         Parameters
         ----------

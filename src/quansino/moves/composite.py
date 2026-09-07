@@ -21,8 +21,9 @@ MoveType = TypeVar("MoveType", bound="Move")
 
 class CompositeMove(Generic[MoveType]):
     """
-    Class to perform a composite move operation. This class is returned when adding or
-    multiplying `Move` objects together.
+    Class to perform a composite move operation.
+
+    This class is returned when adding or multiplying `Move` objects together.
 
     Parameters
     ----------
