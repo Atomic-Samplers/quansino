@@ -34,8 +34,9 @@ CriteriaType = TypeVar("CriteriaType", bound="Criteria")
 
 class MonteCarlo(SingleDriver, Generic[MoveType, CriteriaType]):
     """
-    Base class providing an interface for all Monte Carlo classes. The `MonteCarlo`
-    class is responsible for selecting moves to perform via the
+    Base class providing an interface for all Monte Carlo classes.
+
+    The `MonteCarlo` class is responsible for selecting moves to perform via the
     [`yield_moves`][quansino.mc.core.MonteCarlo.yield_moves] method. This class is also
     responsible for managing the moves, their parameters (interval, probability, minimum
     count), and their acceptance criteria. Logging and trajectory writing are handled by
@@ -310,8 +311,9 @@ class MonteCarlo(SingleDriver, Generic[MoveType, CriteriaType]):
 
     def yield_moves(self) -> Generator[str, None, None]:
         """
-        Yield moves to be performed given the move configured. The moves are selected
-        based on their probability, and their interval. Forced moves are introduced
+        Yield moves to be performed given the move configured.
+
+        The moves are selected based on their probability, and their interval. Forced moves are introduced
         based on their minimum count. Moves are yielded separately, re-constructing the
         move_probabilities array each time, allowing for a dynamic change in the
         probability of moves between moves.
