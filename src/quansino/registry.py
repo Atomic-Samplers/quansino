@@ -1,9 +1,17 @@
 """
 Module for Class registry serialization/deserialization of simulation objects.
 
-This module essentially provides a way to register classes with a name, retrieve them by name. This is useful for serialization and deserialization of custom simulation objects, allowing them to be stored and retrieved without needing to know their exact class at runtime. Users can register their custom classes in their code, which will then be available globally for serialization and deserialization purposes via their `__class__.__name__` attribute.
+This module essentially provides a way to register classes with a name, retrieve them by
+name. This is useful for serialization and deserialization of custom simulation objects,
+allowing them to be stored and retrieved without needing to know their exact class at
+runtime. Users can register their custom classes in their code, which will then be
+available globally for serialization and deserialization purposes via their
+`__class__.__name__` attribute.
 
-Users should avoid using the `__class_registry` global variable directly, and instead use the provided functions to register and retrieve classes. This ensures that the registry is used correctly and avoids potential issues with bad scoping or name collisions.
+Users should avoid using the `__class_registry` global variable directly, and instead
+use the provided functions to register and retrieve classes. This ensures that the
+registry is used correctly and avoids potential issues with bad scoping or name
+collisions.
 """
 
 from __future__ import annotations
