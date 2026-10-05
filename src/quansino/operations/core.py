@@ -16,12 +16,12 @@ class BaseOperation:
     """
     Abstract base class for operations in Monte Carlo simulations.
 
-    This class defines the interface for all operations that can be performed
-    during Monte Carlo moves. Implementations must provide a `calculate` method
-    that computes the operation based on the given context.
+    This class defines the interface for all operations that can be performed during
+    Monte Carlo moves. Implementations must provide a `calculate` method that computes
+    the operation based on the given context.
 
-    Operations can be combined using the `+` operator or multiplied using the `*` operator
-    to create composite operations.
+    Operations can be combined using the `+` operator or multiplied using the `*`
+    operator to create composite operations.
     """
 
     __slots__ = ()

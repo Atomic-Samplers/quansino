@@ -274,8 +274,9 @@ class Logger(TextObserver):
         mask: list[bool] | None = None,
     ) -> None:
         """
-        Add stress fields to the logger for all components of the stress tensor. These
-        can be masked using the `mask` parameter.
+        Add stress fields to the logger for all components of the stress tensor.
+
+        These can be masked using the `mask` parameter.
 
         Parameters
         ----------
