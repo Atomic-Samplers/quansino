@@ -19,8 +19,9 @@ if TYPE_CHECKING:
 
 class Context:
     """
-    Abstract base class for Monte Carlo contexts. Contexts define the interface between
-    the simulation object, the moves and their criteria. They aim to provide the
+    Abstract base class for Monte Carlo contexts.
+
+    Contexts define the interface between the simulation object, the moves and their criteria. They aim to provide the
     necessary information for the move to perform its operation, without having to pass
     whole simulation objects around. Specific context might be required for different
     types of moves, for example,

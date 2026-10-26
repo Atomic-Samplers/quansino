@@ -15,8 +15,9 @@ if TYPE_CHECKING:
 
 class RestartObserver(TextObserver):
     """
-    Observer to write restart data for atomistic simulations. This observer writes the
-    state of the simulation to a file in JSON format at specified intervals, allowing
+    Observer to write restart data for atomistic simulations.
+
+    This observer writes the state of the simulation to a file in JSON format at specified intervals, allowing
     for the simulation to be restarted later.
 
     Parameters
