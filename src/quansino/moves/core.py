@@ -25,8 +25,9 @@ OperationType = TypeVar("OperationType", bound="Operation | Integrator")
 
 class BaseMove(Generic[OperationType, ContextType]):
     """
-    Base class to build Monte Carlo moves. This is a generic base class for all Monte
-    Carlo moves, parameterized by the operation type and context type it works with.
+    Base class to build Monte Carlo moves.
+
+    This is a generic base class for all Monte Carlo moves, parameterized by the operation type and context type it works with.
 
     Parameters
     ----------
@@ -80,8 +81,9 @@ class BaseMove(Generic[OperationType, ContextType]):
 
     def __call__(self, context: ContextType) -> bool:
         """
-        Call the move. This method should be implemented in the subclass, and should
-        return a boolean indicating whether the move was accepted.
+        Call the move.
+
+        This method should be implemented in the subclass, and should return a boolean indicating whether the move was accepted.
 
         Returns
         -------

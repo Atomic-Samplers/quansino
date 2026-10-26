@@ -81,19 +81,23 @@ def test_opt_custom_logger(bulk_small):
     opt.run(fmax=0.01)
 
     text = string_io.getvalue()
-
     assert "NegativeEigenvalues" in text
     assert "False" in text
     assert "Class" in text
-
     assert (
         text.strip()
-        == """Class                    Step     Epot[eV]   Fmax[eV/A]    NegativeEigenvalues          Symbols    Symbol[0]   Symbol[1]   Symbol[2]   Symbol[3]
-BFGS                        0     -14.1584       0.1053                    N/A   Cu  Cu  Cu  Cu           Cu          Cu          Cu          Cu
-BFGS                        1     -14.1587       0.0867                  False   Cu  Cu  Cu  Cu           Cu          Cu          Cu          Cu
-BFGS                        2     -14.1595       0.0299                  False   Cu  Cu  Cu  Cu           Cu          Cu          Cu          Cu
-BFGS                        3     -14.1595       0.0265                  False   Cu  Cu  Cu  Cu           Cu          Cu          Cu          Cu
-BFGS                        4     -14.1596       0.0022                  False   Cu  Cu  Cu  Cu           Cu          Cu          Cu          Cu"""
+        ==\
+           """Class                    Step     Epot[eV]   Fmax[eV/A]
+           NegativeEigenvalues          Symbols    Symbol[0]   Symbol[1]   Symbol[2]
+           Symbol[3] BFGS                        0     -14.1584       0.1053
+           N/A   Cu  Cu  Cu  Cu           Cu          Cu          Cu          Cu BFGS
+           1     -14.1587       0.0867                  False   Cu  Cu  Cu  Cu
+           Cu          Cu          Cu          Cu BFGS                        2
+           -14.1595       0.0299                  False   Cu  Cu  Cu  Cu           Cu
+           Cu          Cu          Cu BFGS                        3     -14.1595
+           0.0265                  False   Cu  Cu  Cu  Cu           Cu          Cu
+           Cu          Cu BFGS                        4     -14.1596       0.0022
+           False   Cu  Cu  Cu  Cu           Cu          Cu          Cu          Cu."""
     )
 
     string_io.close()

@@ -21,8 +21,9 @@ if TYPE_CHECKING:
 
 class Driver:
     """
-    Base class for managing atomistic simulations. This class provides the basic
-    functionality for running simulations, including observer management, file I/O
+    Base class for managing atomistic simulations.
+
+    This class provides the basic functionality for running simulations, including observer management, file I/O
     handling, and simulation state tracking. It is not intended to be used directly, but
     rather as a base class for specific simulation implementations.
 
@@ -279,8 +280,9 @@ class Driver:
 
 class SingleDriver(Driver):
     """
-    Base class for single-drive atomistic simulations. This class extends the `Driver`
-    class to provide additional functionality specific to single-drive simulations.
+    Base class for single-drive atomistic simulations.
+
+    This class extends the `Driver` class to provide additional functionality specific to single-drive simulations.
 
     Parameters
     ----------
@@ -348,8 +350,9 @@ class SingleDriver(Driver):
 
 class MultiDriver(Driver):
     """
-    Base class for multi-systems atomistic simulations. This class extends the `Driver`
-    class to provide additional functionality specific to multi-systems simulations.
+    Base class for multi-systems atomistic simulations.
+
+    This class extends the `Driver` class to provide additional functionality specific to multi-systems simulations.
 
     Parameters
     ----------

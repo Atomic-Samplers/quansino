@@ -24,8 +24,9 @@ CriteriaType = TypeVar("CriteriaType", bound="Criteria")
 
 class Canonical(MonteCarlo[MoveType, CriteriaType], Generic[MoveType, CriteriaType]):
     """
-    Canonical Monte Carlo simulation object for performing NVT simulations. This class
-    is a subclass of the [`MonteCarlo`][quansino.mc.core.MonteCarlo] class and provides
+    Canonical Monte Carlo simulation object for performing NVT simulations.
+
+    This class is a subclass of the [`MonteCarlo`][quansino.mc.core.MonteCarlo] class and provides
     additional functionality specific to canonical simulations. By default, it uses the
     [`DisplacementContext`][quansino.mc.contexts.DisplacementContext] context.
 
