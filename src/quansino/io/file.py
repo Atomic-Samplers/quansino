@@ -82,8 +82,9 @@ class ObserverManager:
 
     def register(self, resource: Callable) -> Any:
         """
-        Register a resource for automatic cleanup. This method registers a callable
-        resource (like a file close method) to be called when the context manager exits
+        Register a resource for automatic cleanup.
+
+        This method registers a callable resource (like a file close method) to be called when the context manager exits
         or when the program terminates. It returns the result of the callback, which is
         typically `None` for close methods.
 
