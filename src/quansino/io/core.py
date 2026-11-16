@@ -34,8 +34,9 @@ class Observer:
     @abstractmethod
     def __call__(self, *args: Any, **kwargs: Any) -> None:
         """
-        Call the observer with the given arguments. This method should be overridden by
-        subclasses to implement specific behavior.
+        Call the observer with the given arguments.
+
+        This method should be overridden by subclasses to implement specific behavior.
 
         Parameters
         ----------
@@ -49,8 +50,9 @@ class Observer:
     @abstractmethod
     def attach_simulation(self, *args: Any, **kwargs: Any) -> None:
         """
-        Attach a simulation to the observer. This method should be overridden by
-        subclasses to implement specific attachment behavior.
+        Attach a simulation to the observer.
+
+        This method should be overridden by subclasses to implement specific attachment behavior.
 
         Parameters
         ----------
@@ -85,8 +87,9 @@ class Observer:
 
 class TextObserver(Observer):
     """
-    Base class for text-based observers in a simulation. `TextObservers` are used to
-    write output to a file or stream at specified intervals.
+    Base class for text-based observers in a simulation.
+
+    `TextObservers` are used to write output to a file or stream at specified intervals.
 
     Parameters
     ----------

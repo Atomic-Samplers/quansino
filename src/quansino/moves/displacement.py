@@ -31,8 +31,9 @@ class DisplacementMove(
     BaseMove[OperationType, ContextType], Generic[OperationType, ContextType]
 ):
     """
-    Class for displacement moves that displaces one atom or a group of atoms. The class
-    will use an [`Operation`][quansino.operations.core.Operation]. The class uses the
+    Class for displacement moves that displaces one atom or a group of atoms.
+
+    The class will use an [`Operation`][quansino.operations.core.Operation]. The class uses the
     `labels` attribute to determine which atoms can be displaced, if none, the move
     fails. If multiple atoms share the same label, they are considered to be part of the
     same group (molecule) and will be displaced together in a consistent manner.
@@ -108,8 +109,9 @@ class DisplacementMove(
 
     def attempt_displacement(self, context: ContextType) -> bool:
         """
-        Attempt to move the atoms using the provided operation and check. The move is
-        attempted `max_attempts` number of times. If the move is successful, return
+        Attempt to move the atoms using the provided operation and check.
+
+        The move is attempted `max_attempts` number of times. If the move is successful, return
         True, otherwise, return False.
 
         Parameters
@@ -142,20 +144,21 @@ class DisplacementMove(
 
     def __call__(self, context: ContextType) -> bool:
         """
-        Perform the displacement move. The following steps are performed:
+        Perform the displacement move.
 
-        1. Check if the atoms to displace are manually set. If not, select a random label from the available labels, if no labels are available, the move fails.
-        2. Find the indices of the atoms to displace and attempt to move them using `attempt_displacement`. If the move is successful, register a success and return True. Otherwise, register a failure and return False.
+        The following steps are performed:
+                1. Check if the atoms to displace are manually set. If not, select a random label from the available labels, if no labels are available, the move fails.
+                2. Find the indices of the atoms to displace and attempt to move them using `attempt_displacement`. If the move is successful, register a success and return True. Otherwise, register a failure and return False.
 
-        Parameters
-        ----------
-        context : ContextType
-            The context for the move.
+                Parameters
+                ----------
+                context : ContextType
+                    The context for the move.
 
-        Returns
-        -------
-        bool
-            Whether the move was valid.
+                Returns
+                -------
+                bool
+                    Whether the move was valid.
         """
         if self.to_displace_labels is None:
             if len(self.unique_labels) == 0:
@@ -172,8 +175,9 @@ class DisplacementMove(
 
     def set_labels(self, new_labels: IntegerArray) -> None:
         """
-        Set the labels of the atoms to displace and update the unique labels. This
-        function should always be used to set the labels.
+        Set the labels of the atoms to displace and update the unique labels.
+
+        This function should always be used to set the labels.
 
         Parameters
         ----------
@@ -362,8 +366,9 @@ class HamiltonianDisplacementMove(
 
 class CompositeDisplacementMove(CompositeMove[DisplacementMove]):
     """
-    Class to perform a composite displacement operation on atoms. This class is returned
-    when adding or multiplying
+    Class to perform a composite displacement operation on atoms.
+
+    This class is returned when adding or multiplying
     [`DisplacementMove`][quansino.moves.displacement.DisplacementMove] objects together.
 
     Parameters
@@ -390,24 +395,25 @@ class CompositeDisplacementMove(CompositeMove[DisplacementMove]):
 
     def __call__(self, context: DisplacementContext) -> bool:
         """
-        Perform the composite displacement move. The following steps are performed:
+        Perform the composite displacement move.
 
-        1. Reset the displaced_labels list to prepare for the new move.
-        2. For each move in the composite, find available candidates that haven't been displaced yet in this composite move.
-        3. If no candidates are available for a move, register a failure for that move and continue.
-        4. Select a random candidate from the available labels and attempt the displacement.
-        5. Register success or failure for each individual move.
-        6. Return True if at least one particle was moved, False otherwise.
+        The following steps are performed:
+                1. Reset the displaced_labels list to prepare for the new move.
+                2. For each move in the composite, find available candidates that haven't been displaced yet in this composite move.
+                3. If no candidates are available for a move, register a failure for that move and continue.
+                4. Select a random candidate from the available labels and attempt the displacement.
+                5. Register success or failure for each individual move.
+                6. Return True if at least one particle was moved, False otherwise.
 
-        Parameters
-        ----------
-        context : DisplacementContext
-            The context for the move.
+                Parameters
+                ----------
+                context : DisplacementContext
+                    The context for the move.
 
-        Returns
-        -------
-        bool
-            Whether at least one move in the composite was successful.
+                Returns
+                -------
+                bool
+                    Whether at least one move in the composite was successful.
         """
         self.reset()
 
