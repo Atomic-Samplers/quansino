@@ -22,14 +22,16 @@ class BaseCriteria(ABC):
     Base class for acceptance criteria, it defines the interface for acceptance criteria
     used in simulations.
 
-    Implementations must provide an `evaluate` method that determines whether a move is accepted or rejected.
+    Implementations must provide an `evaluate` method that determines whether a move is
+    accepted or rejected.
     """
 
     @abstractmethod
     def evaluate(self, context: Context, *args, **kwargs) -> bool:
         """
-        Evaluate whether a Monte Carlo move should be accepted. This method should be
-        implemented in subclasses.
+        Evaluate whether a Monte Carlo move should be accepted.
+
+        This method should be implemented in subclasses.
 
         Parameters
         ----------
