@@ -25,8 +25,9 @@ class ExchangeMove(
     DisplacementMove[OperationType, ContextType], Generic[OperationType, ContextType]
 ):
     """
-    Class for atomic/molecular exchange moves that exchanges atom(s). The class will
-    either add `exchange_atoms` in the unit cell or delete a (group) of atom(s) present
+    Class for atomic/molecular exchange moves that exchanges atom(s).
+
+    The class will either add `exchange_atoms` in the unit cell or delete a (group) of atom(s) present
     in `labels`.
 
     For addition, the move uses the `attempt_move` method in the parent [`DisplacementMove`][quansino.moves.displacement.DisplacementMove] class with the provided [`operation`][quansino.operations.core.Operation] (Translation by default for single atoms, TranslationRotation for multiple atoms).
@@ -87,8 +88,9 @@ class ExchangeMove(
 
     def attempt_addition(self, context: ContextType) -> IntegerArray:
         """
-        Attempt to add atoms to the simulation. If `to_add_atoms` is not set, it will
-        use the `exchange_atoms` from the context.
+        Attempt to add atoms to the simulation.
+
+        If `to_add_atoms` is not set, it will use the `exchange_atoms` from the context.
 
         Returns
         -------
@@ -110,8 +112,9 @@ class ExchangeMove(
 
     def attempt_deletion(self, context: ContextType) -> IntegerArray:
         """
-        Attempt to delete atoms from the simulation. If `to_delete_label` is not set, it
-        will randomly select a label from the unique labels of the context.
+        Attempt to delete atoms from the simulation.
+
+        If `to_delete_label` is not set, it will randomly select a label from the unique labels of the context.
 
         Returns
         -------
@@ -133,16 +136,17 @@ class ExchangeMove(
 
     def __call__(self, context: ContextType) -> bool:
         """
-        Perform the exchange move. The following steps are performed:
+        Perform the exchange move.
 
-        1. Decide whether to insert or delete atoms, this can be pre-selected by setting the `to_add_atoms` or `to_delete_label` attributes before calling the move. If not, the decision is made randomly based on the `bias_towards_insert` attribute.
-        2. If adding atoms, add the atoms to the atoms object and attempt to place them using the parent class [`DisplacementMove.attempt_displacement`][quansino.moves.displacement.DisplacementMove.attempt_displacement]. If the move is not successful, remove the atoms from the atoms object and register the exchange failure. If deleting atoms, remove the atoms from the atoms object, failure is only possible if all labels are negative integers (no atoms to delete).
-        3. During these steps, attributes in the context object are updated to keep track of the move and can be used later for multiple purposes such as calculating the acceptance probability.
+        The following steps are performed:
+                1. Decide whether to insert or delete atoms, this can be pre-selected by setting the `to_add_atoms` or `to_delete_label` attributes before calling the move. If not, the decision is made randomly based on the `bias_towards_insert` attribute.
+                2. If adding atoms, add the atoms to the atoms object and attempt to place them using the parent class [`DisplacementMove.attempt_displacement`][quansino.moves.displacement.DisplacementMove.attempt_displacement]. If the move is not successful, remove the atoms from the atoms object and register the exchange failure. If deleting atoms, remove the atoms from the atoms object, failure is only possible if all labels are negative integers (no atoms to delete).
+                3. During these steps, attributes in the context object are updated to keep track of the move and can be used later for multiple purposes such as calculating the acceptance probability.
 
-        Returns
-        -------
-        bool
-            Whether the move was valid.
+                Returns
+                -------
+                bool
+                    Whether the move was valid.
         """
         if self.to_add_atoms is None and self.to_delete_label is None:
             is_addition = context.rng.random() < self.bias_towards_insert
@@ -251,18 +255,19 @@ class CompositeExchangeMove(CompositeMove[ExchangeMove]):
 
     def __call__(self, context: ExchangeContext) -> bool:
         """
-        Perform the composite exchange move. The following steps are performed:
+        Perform the composite exchange move.
 
-        1. Decide whether to perform addition or deletion based on the `bias_towards_insert` attribute. This will be the same for all moves in the composite, if you want to have different biases for each move, use the `CompositeMove` class with individual `ExchangeMove` objects.
-        2. For addition moves, attempt to add atoms using attempt_addition(). If successful, register the success.
-        3. For deletion moves, filter out already deleted labels to avoid conflicts, then select an available candidate from unique_labels. If no candidates are available, register deletion failure and continue to next move.
-        4. For valid deletion candidates, set the move's to_delete_label and attempt deletion. If successful, register the deletion success.
-        5. Return True if any of the individual moves were successful, False otherwise.
+        The following steps are performed:
+                1. Decide whether to perform addition or deletion based on the `bias_towards_insert` attribute. This will be the same for all moves in the composite, if you want to have different biases for each move, use the `CompositeMove` class with individual `ExchangeMove` objects.
+                2. For addition moves, attempt to add atoms using attempt_addition(). If successful, register the success.
+                3. For deletion moves, filter out already deleted labels to avoid conflicts, then select an available candidate from unique_labels. If no candidates are available, register deletion failure and continue to next move.
+                4. For valid deletion candidates, set the move's to_delete_label and attempt deletion. If successful, register the deletion success.
+                5. Return True if any of the individual moves were successful, False otherwise.
 
-        Returns
-        -------
-        bool
-            Whether any of the exchange moves in the composite were valid.
+                Returns
+                -------
+                bool
+                    Whether any of the exchange moves in the composite were valid.
         """
         is_addition = context.rng.random() < self.bias_towards_insert
 
